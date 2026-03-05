@@ -1,93 +1,111 @@
 import os
 import tempfile
 import shutil
-from pathlib import Path
 from datetime import datetime
 from celery import shared_task
 from django.conf import settings
-from django.core.mail import EmailMessage
+from django.core.mail import EmailMultiAlternatives
 from .models import Token
 from . import utils
 
+import cloudinary
+import cloudinary.uploader
+
+
+def send_assignment_email(to_email: str, student_name: str, file_links: dict):
+    links_html = "\n".join(
+        f'<li><a href="{url}">{name}</a></li>'
+        for name, url in file_links.items()
+    )
+    links_plain = "\n".join(
+        f"- {name}: {url}" for name, url in file_links.items()
+    )
+
+    subject = "Your COS201 Assignment – Files Ready"
+    body_plain = f"""Hello {student_name},
+
+Your COS201 assignment has been generated successfully.
+Download your files using the links below:
+
+{links_plain}
+
+Good luck with your studies!
+"""
+    body_html = f"""
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+  <h2>Hello {student_name},</h2>
+  <p>Your <strong>COS201 assignment</strong> has been generated successfully.</p>
+  <p>Download your files using the links below:</p>
+  <ul>{links_html}</ul>
+  <hr/>
+  <p style="font-size:0.9em; color:#666;">This email was generated automatically. Do not reply.</p>
+</body>
+</html>
+"""
+    msg = EmailMultiAlternatives(
+        subject=subject,
+        body=body_plain,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[to_email],
+    )
+    msg.attach_alternative(body_html, "text/html")
+    msg.send(fail_silently=False)
+
+
 @shared_task
 def generate_assignment_task(token_str, name, matric_number, email):
-    # Mark token as used immediately to prevent double generation
     try:
         token_obj = Token.objects.get(token=token_str, used=False)
     except Token.DoesNotExist:
         return {"error": "Token already used or invalid"}
 
-    # Create temp directory for this job
     job_dir = tempfile.mkdtemp()
-    
-    # Create permanent directory for this assignment
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    safe_email = email.replace('@', '_at_').replace('.', '_dot_')
-    permanent_dir = Path(settings.BASE_DIR) / 'generated_assignments' / f"{safe_email}_{timestamp}"
-    permanent_dir.mkdir(parents=True, exist_ok=True)
-    
-    print(f"\n📁 **SAVING FILES TO: {permanent_dir}**")
-    
+
     try:
-        # 1. Generate dynamic analyses
+        # 1. Analyses
         print("📝 Generating analysis for Q1...")
         analysis_q1 = utils.generate_analysis_q1()
         print("📝 Generating analysis for Q2...")
         analysis_q2 = utils.generate_analysis_q2()
 
-        # 2. Generate dataset
+        # 2. Dataset
         print("📊 Generating dataset...")
         df = utils.generate_dataset()
         dataset_path = os.path.join(job_dir, 'dataset.csv')
         df.to_csv(dataset_path, index=False)
 
         # 3. Flowcharts
-        print("📐 Creating flowchart for Q1...")
-        flowchart_q1 = utils.create_flowchart_q1()
+        print("📐 Creating flowcharts...")
         flowchart_q1_path = os.path.join(job_dir, 'flowchart_q1.png')
         with open(flowchart_q1_path, 'wb') as f:
-            f.write(flowchart_q1)
+            f.write(utils.create_flowchart_q1())
 
-        print("📐 Creating flowchart for Q2...")
-        flowchart_q2 = utils.create_flowchart_q2()
         flowchart_q2_path = os.path.join(job_dir, 'flowchart_q2.png')
         with open(flowchart_q2_path, 'wb') as f:
-            f.write(flowchart_q2)
+            f.write(utils.create_flowchart_q2())
 
-        # 4. Result plots
+        # 4. Model + plots
         print("📈 Training model and generating plots...")
         from sklearn.linear_model import LinearRegression
-
-        print(f"🔍 DataFrame columns: {list(df.columns)}")
-        print(f"🔍 DataFrame shape: {df.shape}")
-
-        # Select all columns except 'target' as features
         feature_cols = [col for col in df.columns if col != 'target']
-        print(f"🔍 Feature columns: {feature_cols}")
-
         if not feature_cols:
-            raise ValueError("No feature columns found! Check dataset generation.")
-
+            raise ValueError("No feature columns found in dataset.")
         X = df[feature_cols]
         y = df['target']
-
-        print(f"🔍 X shape: {X.shape}, y shape: {y.shape}")
-
-        if len(X) == 0 or len(y) == 0:
-            raise ValueError("Empty dataset generated")
-
         model = LinearRegression().fit(X, y)
+
         result_q1_path = os.path.join(job_dir, 'result_q1.png')
         utils.generate_result_plot_q1(df, model, X, y, result_q1_path)
 
         result_q2_path = os.path.join(job_dir, 'result_q2.png')
         utils.generate_result_q2(result_q2_path)
 
-        # 5. Implementation code
+        # 5. Code
         impl_q1 = utils.get_implementation_code_q1('dataset.csv')
         impl_q2 = utils.get_implementation_code_q2()
 
-        # 6. Jupyter notebook
+        # 6. Notebook
         print("📓 Creating Jupyter notebook...")
         notebook_path = os.path.join(job_dir, 'solution.ipynb')
         utils.create_notebook(impl_q1, impl_q2, notebook_path)
@@ -108,95 +126,72 @@ def generate_assignment_task(token_str, name, matric_number, email):
             algo_q2=utils.ALGORITHM_Q2,
             impl_q1=impl_q1,
             impl_q2=impl_q2,
-            save_path=pdf_path
+            save_path=pdf_path,
         )
 
-        # 8. Prepare attachments list
-        attachments = [
-            ('COS201_ASSIGNMENT.pdf', pdf_path, 'application/pdf'),
-            ('flowchart_q1.png', flowchart_q1_path, 'image/png'),
-            ('flowchart_q2.png', flowchart_q2_path, 'image/png'),
-            ('result_q1.png', result_q1_path, 'image/png'),
-            ('result_q2.png', result_q2_path, 'image/png'),
-            ('solution.ipynb', notebook_path, 'application/x-ipynb+json'),
-            ('dataset.csv', dataset_path, 'text/csv'),
+        # 8. Upload to Cloudinary
+        print("☁️  Uploading files to Cloudinary...")
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        safe_email = email.replace('@', '_at_').replace('.', '_dot_')
+        prefix = f"{safe_email}_{ts}"
+
+        cloudinary.config(
+            cloud_name=settings.CLOUDINARY_CLOUD_NAME,
+            api_key=settings.CLOUDINARY_API_KEY,
+            api_secret=settings.CLOUDINARY_API_SECRET,
+        )
+
+        upload_manifest = [
+            ("COS201_ASSIGNMENT.pdf", pdf_path,          "raw",   f"{prefix}/COS201_ASSIGNMENT"),
+            ("flowchart_q1.png",      flowchart_q1_path, "image", f"{prefix}/flowchart_q1"),
+            ("flowchart_q2.png",      flowchart_q2_path, "image", f"{prefix}/flowchart_q2"),
+            ("result_q1.png",         result_q1_path,    "image", f"{prefix}/result_q1"),
+            ("result_q2.png",         result_q2_path,    "image", f"{prefix}/result_q2"),
+            ("solution.ipynb",        notebook_path,     "raw",   f"{prefix}/solution"),
+            ("dataset.csv",           dataset_path,      "raw",   f"{prefix}/dataset"),
         ]
 
-        # 9. Copy all files to permanent directory
-        print(f"💾 Copying files to permanent location...")
-        for filename, file_path, _ in attachments:
-            if os.path.exists(file_path):
-                dest_path = permanent_dir / filename
-                shutil.copy2(file_path, dest_path)
-                print(f"  ✅ Copied: {filename} ({os.path.getsize(file_path)} bytes)")
+        file_links = {}
+        for display_name, local_path, res_type, public_id in upload_manifest:
+            print(f"  ⬆️  Uploading {display_name}...")
+            result = cloudinary.uploader.upload(
+                local_path,
+                public_id=f"assignments/{public_id}",
+                resource_type=res_type,
+                overwrite=True,
+            )
+            file_links[display_name] = result["secure_url"]
+            print(f"  ✅ {display_name} → {result['secure_url']}")
 
-        with open(permanent_dir / 'analysis_q1.txt', 'w') as f:
-            f.write(analysis_q1)
-        with open(permanent_dir / 'analysis_q2.txt', 'w') as f:
-            f.write(analysis_q2)
-
-        with open(permanent_dir / 'implementation_q1.py', 'w') as f:
-            f.write(impl_q1)
-        with open(permanent_dir / 'implementation_q2.py', 'w') as f:
-            f.write(impl_q2)
-
-        # 10. Email simulation
-        print(f"\n{'='*60}")
-        print(f"📧 EMAIL WOULD BE SENT TO: {email}")
-        print(f"{'='*60}")
-        print(f"Subject: Your COS201 Assignment")
-        print(f"From: noreply@example.com")
-        print(f"Attachments:")
-        for filename, file_path, _ in attachments:
-            if os.path.exists(file_path):
-                print(f"  - {filename} ({os.path.getsize(file_path)} bytes)")
-        print(f"{'='*60}\n")
-        print(f"✅ Email simulation complete for {email}")
-
-        # 11. Mark token as used
-        token_obj.used = True
+        # 9. Save to DB immediately after upload — before email attempt.
+        #    This means the frontend always gets the download links even if email fails.
+        token_obj.used          = True
         token_obj.used_by_email = email
-        token_obj.save()
+        token_obj.file_links    = file_links
+        token_obj.task_status   = Token.AssignmentStatus.DONE
+        token_obj.save(update_fields=['used', 'used_by_email', 'file_links', 'task_status'])
+        print("✅ file_links saved to DB.")
 
-        # 12. README
-        with open(permanent_dir / 'README.txt', 'w') as f:
-            f.write(f"""COS201 ASSIGNMENT GENERATED
-==========================
-Student: {name}
-Matric: {matric_number}
-Email: {email}
-Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+        # 10. Send email — non-fatal: log failure but don't crash the task
+        print(f"📧 Sending email to {email}...")
+        try:
+            send_assignment_email(to_email=email, student_name=name, file_links=file_links)
+            print("✅ Email sent.")
+        except Exception as email_err:
+            # Email failed (e.g. unverified sender) but files are already uploaded.
+            # Return success so the frontend still gets the download links.
+            print(f"⚠️  Email failed (files still available): {email_err}")
 
-FILES GENERATED:
-- COS201_ASSIGNMENT.pdf : Complete assignment document
-- flowchart_q1.png      : Flowchart for Question 1
-- flowchart_q2.png      : Flowchart for Question 2
-- result_q1.png         : Regression plot for Question 1
-- result_q2.png         : File handling demo for Question 2
-- solution.ipynb        : Jupyter notebook with code
-- dataset.csv           : Generated dataset (350+ rows)
-- analysis_q1.txt       : Analysis text for Question 1
-- analysis_q2.txt       : Analysis text for Question 2
-- implementation_q1.py  : Python code for Question 1
-- implementation_q2.py  : Python code for Question 2
-
-All files successfully generated!
-""")
-
-        return {
-            "success": True,
-            "email": email,
-            "message": "Assignment generated successfully",
-            "files_location": str(permanent_dir)
-        }
+        return {"success": True, "email": email, "file_links": file_links}
 
     except Exception as e:
-        print(f"❌ Error in generate_assignment_task: {str(e)}")
+        print(f"❌ Error: {e}")
         import traceback
         traceback.print_exc()
+        token_obj.task_status = Token.AssignmentStatus.FAILED
+        token_obj.save(update_fields=['task_status'])
         raise e
+
     finally:
         shutil.rmtree(job_dir, ignore_errors=True)
-        print(f"🧹 Cleaned up temp directory: {job_dir}")
-        print(f"📁 Your files are SAFE and saved in: {permanent_dir}")
-        print(f"📂 Open this folder: file://{permanent_dir}")
+        print(f"🧹 Cleaned up temp dir: {job_dir}")

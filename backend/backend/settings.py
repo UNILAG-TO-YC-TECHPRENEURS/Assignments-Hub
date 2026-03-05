@@ -131,13 +131,14 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
+# ── Static / Media ────────────────────────────────────────────────────────────
 STATIC_URL = 'static/'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Django REST Framework
+# ── Django REST Framework ─────────────────────────────────────────────────────
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
@@ -148,25 +149,37 @@ SPECTACULAR_SETTINGS = {
     'VERSION': '1.0.0',
 }
 
-# Celery
+# ── Celery ────────────────────────────────────────────────────────────────────
 CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 
-# SendGrid Settings
-SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY')
+# ── Email / SendGrid ──────────────────────────────────────────────────────────
+# django-sendgrid-v5  (pip install django-sendgrid-v5)
+# This backend uses the SendGrid Web API (not SMTP), so no port/host needed.
+SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY', '')
 DEFAULT_FROM_EMAIL = os.environ.get('FROM_EMAIL', 'noreply@yourdomain.com')
 
-# Email Backend - Use SendGrid for production
 if DEBUG:
-    # In development, still use console for testing
+    # Print emails to console during local development
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 else:
-    # In production, use SendGrid
     EMAIL_BACKEND = 'sendgrid_backend.SendgridBackend'
+    # When SENDGRID_SANDBOX_MODE_IN_DEBUG is False, emails are always delivered.
     SENDGRID_SANDBOX_MODE_IN_DEBUG = False
+    # Echo SendGrid API responses to server logs – useful for debugging.
+    SENDGRID_ECHO_TO_STDOUT = os.environ.get('SENDGRID_ECHO', 'False') == 'True'
 
-# OpenAI Settings
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+# ── OpenAI ────────────────────────────────────────────────────────────────────
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
 
-# Gemini
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+# ── Gemini ────────────────────────────────────────────────────────────────────
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+
+# ── CORS ──────────────────────────────────────────────────────────────────────
+CORS_ALLOW_ALL_ORIGINS = True
+
+# ── Cloudinary ────────────────────────────────────────────────────────────────
+# pip install cloudinary
+CLOUDINARY_CLOUD_NAME = os.getenv('CLOUDINARY_CLOUD_NAME', '')
+CLOUDINARY_API_KEY    = os.getenv('CLOUDINARY_API_KEY', '')
+CLOUDINARY_API_SECRET = os.getenv('CLOUDINARY_API_SECRET', '')

@@ -21,6 +21,10 @@
     box-shadow: 0 0 20px rgba(59, 131, 247, 0.4);
   }
 
+  .token-glow {
+    text-shadow: 0 0 20px rgba(59, 131, 247, 0.4);
+  }
+
   .bg-gradient-mesh {
     background-color: #0a0f1e;
     background-image: radial-gradient(at 0% 0%, rgba(59, 131, 247, 0.15) 0px, transparent 50%),
