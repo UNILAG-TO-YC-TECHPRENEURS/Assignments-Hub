@@ -27,11 +27,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-^lvnyc*#d5uks)3^89_&7u#=ab^ef=2meb#_t)lmb*b)w^)p_2'
 
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-EMAIL_FILE_PATH = BASE_DIR / 'sent_emails'  # Optional: saves emails as files too
-
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ['*']
 
@@ -155,23 +152,21 @@ SPECTACULAR_SETTINGS = {
 CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 
-# SendGrid
-# SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY')
-# FROM_EMAIL = os.environ.get('FROM_EMAIL', 'noreply@example.com')
+# SendGrid Settings
+SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY')
+DEFAULT_FROM_EMAIL = os.environ.get('FROM_EMAIL', 'noreply@yourdomain.com')
 
-# if DEBUG:
-#     # In development, just print emails to console
-#     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-# else:
-#     # In production, use SendGrid
-#     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-#     EMAIL_HOST = 'smtp.sendgrid.net'
-#     EMAIL_PORT = 587
-#     EMAIL_USE_TLS = True
-#     EMAIL_HOST_USER = 'apikey'  # This is literally the string 'apikey'
-#     EMAIL_HOST_PASSWORD = os.environ.get('SENDGRID_API_KEY')
-#     DEFAULT_FROM_EMAIL = os.environ.get('FROM_EMAIL', 'noreply@example.com')
+# Email Backend - Use SendGrid for production
+if DEBUG:
+    # In development, still use console for testing
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    # In production, use SendGrid
+    EMAIL_BACKEND = 'sendgrid_backend.SendgridBackend'
+    SENDGRID_SANDBOX_MODE_IN_DEBUG = False
 
+# OpenAI Settings
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 
 # Gemini
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
