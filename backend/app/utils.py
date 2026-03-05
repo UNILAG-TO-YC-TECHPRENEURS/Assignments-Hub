@@ -24,6 +24,13 @@ import google.generativeai as genai
 from django.conf import settings
 from django.core.files.base import ContentFile
 
+"""Utility functions for assignment generation"""
+import matplotlib
+matplotlib.use('Agg')  # Must be before importing pyplot
+import matplotlib.pyplot as plt
+
+# Then your other imports...
+
 genai.configure(api_key=settings.GEMINI_API_KEY)
 
 # ---------- Gemini Helpers ----------

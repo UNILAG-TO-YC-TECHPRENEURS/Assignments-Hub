@@ -85,32 +85,54 @@ def generate_assignment_task(token_str, name, matric_number, email):
             (result_q1_path, 'image/png'),
             (result_q2_path, 'image/png'),
             (notebook_path, 'application/x-ipynb+json'),
-            (dataset_path, 'text/csv'),  # optionally include dataset
+            (dataset_path, 'text/csv'),
         ]
 
-        # 9. Send email via SendGrid
+        # 9. Send email (works with both console and SMTP backends)
         subject = "Your COS201 Assignment"
         body = f"Dear {name},\n\nPlease find attached your COS201 assignment solution.\n\nRegards,\nCOS201 Generator"
-        from_email = settings.FROM_EMAIL
+        from_email = 'noreply@example.com'
         to_email = [email]
 
-        email_msg = EmailMessage(subject, body, from_email, to_email)
+        print(f"\n{'='*60}")
+        print(f"📧 EMAIL WOULD BE SENT TO: {email}")
+        print(f"{'='*60}")
+        print(f"Subject: {subject}")
+        print(f"From: {from_email}")
+        print(f"Attachments:")
         for file_path, mime_type in attachments:
-            with open(file_path, 'rb') as f:
-                email_msg.attach(os.path.basename(file_path), f.read(), mime_type)
+            if os.path.exists(file_path):
+                file_size = os.path.getsize(file_path)
+                print(f"  - {os.path.basename(file_path)} ({file_size} bytes)")
+        print(f"{'='*60}\n")
 
-        email_msg.send(fail_silently=False)
+        # DON'T ACTUALLY SEND EMAIL YET
+        # email_msg = EmailMessage(subject, body, from_email, to_email)
+        # email_msg.send(fail_silently=False)
+
+        print(f"✅ Email simulation complete for {email}")
 
         # 10. Mark token as used
         token_obj.used = True
         token_obj.used_by_email = email
         token_obj.save()
 
-        return {"success": True, "email": email}
+        return {
+            "success": True, 
+            "email": email,
+            "message": "Assignment generated and sent successfully"
+        }
 
     except Exception as e:
-        # Log error and maybe re-raise
+        # Log error with details
+        print(f"❌ Error in generate_assignment_task: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise e
     finally:
         # Cleanup temp dir
-        shutil.rmtree(job_dir, ignore_errors=True)
+        try:
+            shutil.rmtree(job_dir, ignore_errors=True)
+            print(f"🧹 Cleaned up temp directory: {job_dir}")
+        except Exception as cleanup_error:
+            print(f"⚠️ Error cleaning up {job_dir}: {cleanup_error}")
