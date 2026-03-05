@@ -50,7 +50,7 @@ The task is to write a Python function that reads a file and returns its content
 Explain the step by step plan for implementing the solution.
 The tone must sound natural, simple, and like it was written by a student.
 Length: around 150–250 words."""
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.5-flash')
     response = model.generate_content(prompt)
     return response.text
 
