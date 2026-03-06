@@ -518,18 +518,17 @@ def generate_pdf(student_name, matric_number, analysis_q1, analysis_q2,
         if os.path.exists(path):
             c.showPage()  # new page for each image
             img = ImageReader(path)
-            # Scale image to fit within margins while preserving aspect ratio
-            img_width = 450
-            img_height = 250
+            # Use larger, print-friendly dimensions
+            img_width = 480          # almost full content width
+            img_height = 300          # fixed height – images will scale proportionally
             img_x = left_margin + (content_width - img_width) // 2
-            y_img = height - 100  # leave some top margin
+            y_img = height - 120      # leave more top margin
             c.drawImage(img, img_x, y_img - img_height, width=img_width, height=img_height, preserveAspectRatio=True)
             # Add caption below image
             c.setFont("Helvetica", 10)
-            c.drawString(left_margin, y_img - img_height - 15, caption)
+            c.drawString(left_margin, y_img - img_height - 20, caption)
 
     c.save()
-
 # ---------- Algorithm texts ----------
 ALGORITHM_Q1 = """Step 1: Start
 Step 2: Import required libraries (pandas, sklearn.linear_model, matplotlib)

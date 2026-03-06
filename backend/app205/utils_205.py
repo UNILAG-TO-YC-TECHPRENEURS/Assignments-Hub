@@ -584,6 +584,8 @@ def generate_pdf(student_name, matric_number, analysis,
 
     # ========== IMAGE PAGES ==========
     # After all text, create a new page for each image with a caption.
+        # ========== IMAGE PAGES ==========
+    # After all text, create a new page for each image with a caption.
     images = [
         ("original_signal.png", result_paths['signal'], "Figure 1: Downsampled Energy Demand Signal"),
         ("flowchart_dft.png", flowchart_dft_path, "Figure 2: Flowchart – Discrete Fourier Transform"),
@@ -598,13 +600,18 @@ def generate_pdf(student_name, matric_number, analysis,
         if os.path.exists(path):
             c.showPage()
             img = ImageReader(path)
-            img_width = 450
-            img_height = 250 if filename != "comparison.png" else 280
+            # Use larger dimensions – comparison plot is wider
+            if filename == "comparison.png":
+                img_width = 520
+                img_height = 300
+            else:
+                img_width = 480
+                img_height = 300
             img_x = left_margin + (content_width - img_width) // 2
-            y_img = height - 100
+            y_img = height - 120
             c.drawImage(img, img_x, y_img - img_height, width=img_width, height=img_height, preserveAspectRatio=True)
             c.setFont("Helvetica", 10)
-            c.drawString(left_margin, y_img - img_height - 15, caption)
+            c.drawString(left_margin, y_img - img_height - 20, caption)
 
     c.save()
 
