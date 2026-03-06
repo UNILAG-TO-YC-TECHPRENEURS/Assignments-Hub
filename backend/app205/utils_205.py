@@ -461,7 +461,7 @@ def create_notebook(impl_code, save_path):
     with open(save_path, 'w') as f:
         nbf.write(nb, f)
 
-# ---------- PDF Generation ----------
+# ---------- PDF Generation with images on separate pages ----------
 def generate_pdf(student_name, matric_number, analysis,
                  flowchart_dft_path, flowchart_fft_path,
                  result_paths, algo_dft, algo_fft, impl_code, save_path):
@@ -491,17 +491,6 @@ def generate_pdf(student_name, matric_number, analysis,
         c.setFont("Helvetica-Bold", 12)
         c.drawString(left_margin, y, label)
         return y - 18
-
-    def add_image(path, y, img_h=200, img_w=400):
-        if not os.path.exists(path):
-            return y
-        if y < img_h + 20:
-            c.showPage()
-            y = height - 50
-        img   = ImageReader(path)
-        img_x = left_margin + (content_width - img_w) // 2
-        c.drawImage(img, img_x, y - img_h, width=img_w, height=img_h, preserveAspectRatio=True)
-        return y - (img_h + 20)
 
     y = height - 50
 
@@ -540,14 +529,21 @@ def generate_pdf(student_name, matric_number, analysis,
     # DFT Design
     y = section_heading("Design - DFT", y)
     y -= draw_paragraph("Flowchart and Algorithm for DFT provided below.", styles['normal'], left_margin, y, content_width) + 15
-    y = add_image(flowchart_dft_path, y)
 
-    y = section_heading("DFT Algorithm", y)
+    # DFT Algorithm
+    if y < 100:
+        c.showPage()
+        y = height - 50
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(left_margin, y, "DFT Algorithm")
+    y -= 18
     c.setFont("Courier", 8)
     for line in algo_dft.split('\n'):
         if line.strip():
             if y < 50:
-                c.showPage(); y = height - 50; c.setFont("Courier", 8)
+                c.showPage()
+                y = height - 50
+                c.setFont("Courier", 8)
             c.drawString(left_margin + 10, y, line)
             y -= 10
     y -= 5
@@ -555,14 +551,21 @@ def generate_pdf(student_name, matric_number, analysis,
     # FFT Design
     y = section_heading("Design - FFT", y)
     y -= draw_paragraph("Flowchart and Algorithm for FFT provided below.", styles['normal'], left_margin, y, content_width) + 15
-    y = add_image(flowchart_fft_path, y)
 
-    y = section_heading("FFT Algorithm", y)
+    # FFT Algorithm
+    if y < 100:
+        c.showPage()
+        y = height - 50
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(left_margin, y, "FFT Algorithm")
+    y -= 18
     c.setFont("Courier", 8)
     for line in algo_fft.split('\n'):
         if line.strip():
             if y < 50:
-                c.showPage(); y = height - 50; c.setFont("Courier", 8)
+                c.showPage()
+                y = height - 50
+                c.setFont("Courier", 8)
             c.drawString(left_margin + 10, y, line)
             y -= 10
     y -= 5
@@ -572,17 +575,36 @@ def generate_pdf(student_name, matric_number, analysis,
     c.setFont("Courier", 6)
     for line in impl_code.split('\n'):
         if y < 50:
-            c.showPage(); y = height - 50; c.setFont("Courier", 6)
+            c.showPage()
+            y = height - 50
+            c.setFont("Courier", 6)
         c.drawString(left_margin + 10, y, line[:80] + ("..." if len(line) > 80 else ""))
         y -= 8
     y -= 10
 
-    # Results
-    y = section_heading("Results", y)
-    for key in ['signal', 'dft_serial_mag', 'dft_parallel_mag', 'fft_mag', 'comparison']:
-        path = result_paths.get(key, '')
-        y = add_image(path, y, img_h=200 if key != 'comparison' else 225,
-                      img_w=400 if key != 'comparison' else 450)
+    # ========== IMAGE PAGES ==========
+    # After all text, create a new page for each image with a caption.
+    images = [
+        ("original_signal.png", result_paths['signal'], "Figure 1: Downsampled Energy Demand Signal"),
+        ("flowchart_dft.png", flowchart_dft_path, "Figure 2: Flowchart – Discrete Fourier Transform"),
+        ("flowchart_fft.png", flowchart_fft_path, "Figure 3: Flowchart – Fast Fourier Transform"),
+        ("dft_serial_magnitude.png", result_paths['dft_serial_mag'], "Figure 4: DFT Magnitude (Serial) – AC Spectrum"),
+        ("dft_parallel_magnitude.png", result_paths['dft_parallel_mag'], "Figure 5: DFT Magnitude (Parallel) – AC Spectrum"),
+        ("fft_magnitude.png", result_paths['fft_mag'], "Figure 6: FFT Magnitude – AC Spectrum"),
+        ("comparison.png", result_paths['comparison'], "Figure 7: Magnitude Spectrum Comparison"),
+    ]
+
+    for filename, path, caption in images:
+        if os.path.exists(path):
+            c.showPage()
+            img = ImageReader(path)
+            img_width = 450
+            img_height = 250 if filename != "comparison.png" else 280
+            img_x = left_margin + (content_width - img_width) // 2
+            y_img = height - 100
+            c.drawImage(img, img_x, y_img - img_height, width=img_width, height=img_height, preserveAspectRatio=True)
+            c.setFont("Helvetica", 10)
+            c.drawString(left_margin, y_img - img_height - 15, caption)
 
     c.save()
 

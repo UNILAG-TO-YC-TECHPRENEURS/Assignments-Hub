@@ -1,6 +1,7 @@
 import os
 import tempfile
 import shutil
+import zipfile
 from datetime import datetime
 from celery import shared_task
 from django.conf import settings
@@ -12,22 +13,49 @@ import cloudinary
 import cloudinary.uploader
 
 
-def send_assignment_email(to_email, student_name, file_links):
-    links_html  = "\n".join(f'<li><a href="{u}">{n}</a></li>' for n, u in file_links.items())
-    links_plain = "\n".join(f"- {n}: {u}" for n, u in file_links.items())
+def create_zip_archive(file_paths, zip_path):
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for fp in file_paths:
+            if os.path.exists(fp):
+                zipf.write(fp, arcname=os.path.basename(fp))
+    return zip_path
 
+
+def send_assignment_email(to_email: str, student_name: str, zip_path: str, course: str = "COS205"):
+    subject = f"Your {course} Assignment – Files Attached"
+    body_plain = f"""Hello {student_name},
+
+Your {course} assignment has been generated successfully.
+All files are attached as a ZIP archive.
+
+Good luck with your studies!
+"""
+    body_html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #0A0F1E 0%, #1a1f2e 100%); border-radius: 12px; padding: 30px; color: #fff;">
+        <h2 style="margin-top: 0; color: #3b83f7;">Hello {student_name},</h2>
+        <p>Your <strong style="color: #3b83f7;">{course} assignment</strong> has been generated successfully.</p>
+        <p>All files are attached as a ZIP archive.</p>
+        <hr style="border: 1px solid #3b83f733; margin: 20px 0;">
+        <p style="font-size:0.9em; color:#aaa;">This email was generated automatically. Do not reply.</p>
+    </div>
+</body>
+</html>
+"""
     msg = EmailMultiAlternatives(
-        subject="Your COS205 Assignment – Files Ready",
-        body=f"Hello {student_name},\n\nYour COS205 assignment is ready.\n\n{links_plain}\n\nGood luck!",
+        subject=subject,
+        body=body_plain,
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[to_email],
     )
-    msg.attach_alternative(f"""
-<html><body style="font-family:Arial;line-height:1.6">
-<h2>Hello {student_name},</h2>
-<p>Your <strong>COS205 assignment</strong> is ready. Download your files:</p>
-<ul>{links_html}</ul>
-</body></html>""", "text/html")
+    msg.attach_alternative(body_html, "text/html")
+    with open(zip_path, 'rb') as f:
+        msg.attach(f"{course}_Assignment_{student_name}.zip", f.read(), 'application/zip')
     msg.send(fail_silently=False)
 
 
@@ -126,21 +154,33 @@ def generate_assignment205_task(token_str, name, matric_number, email):
             file_links[display_name] = result["secure_url"]
             print(f"  ✅ {display_name} → {result['secure_url']}")
 
-        # 8. Save to DB before email so download always works
-        token_obj.used          = True
+        # 8. Save to DB
+        token_obj.used = True
         token_obj.used_by_email = email
-        token_obj.file_links    = file_links
-        token_obj.task_status   = Token205.AssignmentStatus.DONE
+        token_obj.file_links = file_links
+        token_obj.task_status = Token205.AssignmentStatus.DONE
         token_obj.save(update_fields=['used', 'used_by_email', 'file_links', 'task_status'])
         print("✅ file_links saved to DB.")
 
-        # 9. Email (non-fatal)
+        # 9. Create ZIP archive
+        print("📦 Creating ZIP archive...")
+        all_files = [
+            pdf_path, flowchart_dft_path, flowchart_fft_path,
+            result_paths['signal'], result_paths['dft_serial_mag'],
+            result_paths['dft_parallel_mag'], result_paths['fft_mag'],
+            result_paths['comparison'], notebook_path, dataset_path
+        ]
+        zip_path = os.path.join(job_dir, f"COS205_Assignment_{safe_email}.zip")
+        create_zip_archive(all_files, zip_path)
+        print(f"✅ ZIP archive created: {zip_path}")
+
+        # 10. Send email with ZIP attachment
         print(f"📧 Sending email to {email}...")
         try:
-            send_assignment_email(to_email=email, student_name=name, file_links=file_links)
-            print("✅ Email sent.")
+            send_assignment_email(to_email=email, student_name=name, zip_path=zip_path, course="COS205")
+            print("✅ Email sent with ZIP attachment.")
         except Exception as email_err:
-            print(f"⚠️  Email failed (files still available): {email_err}")
+            print(f"⚠️  Email failed (files still available via Cloudinary): {email_err}")
 
         return {"success": True, "email": email, "file_links": file_links}
 

@@ -304,11 +304,11 @@ def create_notebook(q1_code, q2_code, save_path):
     except Exception as e:
         print(f"Error creating notebook: {e}")
 
-# ---------- PDF Generation (with fixed spacing & fonts) ----------
+# ---------- PDF Generation with images on separate pages ----------
 def generate_pdf(student_name, matric_number, analysis_q1, analysis_q2,
                  flowchart_q1_path, flowchart_q2_path, result_q1_path, result_q2_path,
                  algo_q1, algo_q2, impl_q1, impl_q2, save_path):
-    
+
     width, height = A4
     left_margin = 50
     right_margin = width - 50
@@ -332,7 +332,7 @@ def generate_pdf(student_name, matric_number, analysis_q1, analysis_q2,
 
     y = height - 50
 
-    # Title page
+    # ========== TITLE PAGE ==========
     c.setFont("Helvetica-Bold", 16)
     c.drawString(left_margin, y, "COS 201 ASSIGNMENT")
     y -= 25
@@ -341,7 +341,7 @@ def generate_pdf(student_name, matric_number, analysis_q1, analysis_q2,
     c.drawString(left_margin + 300, y, f"Matric: {matric_number}")
     y -= 40
 
-    # Question 1
+    # ========== QUESTION 1 ==========
     c.setFont("Helvetica-Bold", 14)
     c.drawString(left_margin, y, "QUESTION 1")
     y -= 25
@@ -382,19 +382,7 @@ def generate_pdf(student_name, matric_number, analysis_q1, analysis_q2,
     design_text = "Flowchart and Algorithm provided below."
     y -= draw_paragraph(design_text, styles['normal'], left_margin, y, content_width) + 15
 
-    # Flowchart image
-    if os.path.exists(flowchart_q1_path):
-        if y < 180:
-            c.showPage()
-            y = height - 50
-        img = ImageReader(flowchart_q1_path)
-        img_width = 400
-        img_height = 200
-        img_x = left_margin + (content_width - img_width) // 2
-        c.drawImage(img, img_x, y - img_height, width=img_width, height=img_height, preserveAspectRatio=True)
-        y -= (img_height + 20)
-
-    # Algorithm
+    # Algorithm (we keep algorithm text inline, no image yet)
     if y < 100:
         c.showPage()
         y = height - 50
@@ -432,25 +420,7 @@ def generate_pdf(student_name, matric_number, analysis_q1, analysis_q2,
             y -= 8
     y -= 10
 
-    # Result
-    if y < 100:
-        c.showPage()
-        y = height - 50
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(left_margin, y, "Result")
-    y -= 18
-    if os.path.exists(result_q1_path):
-        if y < 180:
-            c.showPage()
-            y = height - 50
-        img = ImageReader(result_q1_path)
-        img_width = 400
-        img_height = 200
-        img_x = left_margin + (content_width - img_width) // 2
-        c.drawImage(img, img_x, y - img_height, width=img_width, height=img_height, preserveAspectRatio=True)
-        y -= (img_height + 30)
-
-    # Question 2 - similar pattern (condensed for brevity; keep same style)
+    # ========== QUESTION 2 ==========
     if y < 200:
         c.showPage()
         y = height - 50
@@ -497,18 +467,6 @@ def generate_pdf(student_name, matric_number, analysis_q1, analysis_q2,
     design_text2 = "Flowchart and Algorithm provided below."
     y -= draw_paragraph(design_text2, styles['normal'], left_margin, y, content_width) + 15
 
-    # Flowchart Q2
-    if os.path.exists(flowchart_q2_path):
-        if y < 180:
-            c.showPage()
-            y = height - 50
-        img = ImageReader(flowchart_q2_path)
-        img_width = 400
-        img_height = 200
-        img_x = left_margin + (content_width - img_width) // 2
-        c.drawImage(img, img_x, y - img_height, width=img_width, height=img_height, preserveAspectRatio=True)
-        y -= (img_height + 20)
-
     # Algorithm Q2
     if y < 100:
         c.showPage()
@@ -547,22 +505,28 @@ def generate_pdf(student_name, matric_number, analysis_q1, analysis_q2,
             y -= 8
     y -= 10
 
-    # Result Q2
-    if y < 100:
-        c.showPage()
-        y = height - 50
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(left_margin, y, "Result")
-    y -= 18
-    if os.path.exists(result_q2_path):
-        if y < 150:
-            c.showPage()
-            y = height - 50
-        img = ImageReader(result_q2_path)
-        img_width = 400
-        img_height = 150
-        img_x = left_margin + (content_width - img_width) // 2
-        c.drawImage(img, img_x, y - img_height, width=img_width, height=img_height, preserveAspectRatio=True)
+    # ========== IMAGE PAGES ==========
+    # After all text, start a new section with each image on its own page.
+    images = [
+        ("flowchart_q1.png", flowchart_q1_path, "Figure 1: Flowchart – Question 1 (Multiple Linear Regression)"),
+        ("flowchart_q2.png", flowchart_q2_path, "Figure 2: Flowchart – Question 2 (File Reading)"),
+        ("result_q1.png", result_q1_path, "Figure 3: Actual vs Predicted – Question 1"),
+        ("result_q2.png", result_q2_path, "Figure 4: File Handling Demo – Question 2"),
+    ]
+
+    for filename, path, caption in images:
+        if os.path.exists(path):
+            c.showPage()  # new page for each image
+            img = ImageReader(path)
+            # Scale image to fit within margins while preserving aspect ratio
+            img_width = 450
+            img_height = 250
+            img_x = left_margin + (content_width - img_width) // 2
+            y_img = height - 100  # leave some top margin
+            c.drawImage(img, img_x, y_img - img_height, width=img_width, height=img_height, preserveAspectRatio=True)
+            # Add caption below image
+            c.setFont("Helvetica", 10)
+            c.drawString(left_margin, y_img - img_height - 15, caption)
 
     c.save()
 
