@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'corsheaders',
     'app',
+    'app205',  # new app
 ]
 
 MIDDLEWARE = [
