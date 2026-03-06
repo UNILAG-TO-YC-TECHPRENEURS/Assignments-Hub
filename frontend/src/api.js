@@ -2,70 +2,52 @@ import axios from 'axios';
 
 const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
+  timeout: 360000, // 6 minutes — must be longer than the slowest task
 });
-
-API.interceptors.request.use(
-  (config) => config,
-  (error) => Promise.reject(error)
-);
 
 API.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response) {
-      console.error('API Error:', error.response.data);
-      switch (error.response.status) {
-        case 400:
-          error.message =
-            error.response.data?.token?.[0] ||
-            error.response.data?.error ||
-            'Bad request';
-          break;
-        case 401:
-          error.message = 'Unauthorized. Please check your token.';
-          break;
-        case 404:
-          error.message = 'Resource not found.';
-          break;
-        case 500:
-          error.message = 'Server error. Please try again later.';
-          break;
-        default:
-          error.message = error.response.data?.error || 'An error occurred';
-      }
+      let msg = error.response.data?.error || 'An error occurred';
+      if (error.response.status === 400) msg = error.response.data?.token?.[0] || msg;
+      else if (error.response.status === 401) msg = 'Unauthorized. Check your token.';
+      else if (error.response.status === 404) msg = 'Resource not found.';
+      else if (error.response.status === 500) msg = 'Server error. Try again later.';
+      error.message = msg;
+    } else if (error.code === 'ECONNABORTED') {
+      error.message = 'Request timed out. Please try again.';
     } else if (error.request) {
-      error.message = 'Cannot connect to server. Please check your connection.';
+      error.message = 'Cannot connect to server. Check your connection.';
     }
     return Promise.reject(error);
   }
 );
 
 export const tokenAPI = {
-  generateToken: async () => {
-    const response = await API.post('/tokens/');
-    return response.data;
-  },
+  generateToken201: () => API.post('/tokens/').then(r => r.data),
+  getAllTokens201:   () => API.get('/tokens/').then(r => r.data),
+  generateToken205: () => API.post('/205/tokens/').then(r => r.data),
+  getAllTokens205:   () => API.get('/205/tokens/').then(r => r.data),
 };
 
 export const assignmentAPI = {
-  generateAssignment: async (data) => {
-    const response = await API.post('/generate/', {
-      token: data.token,
-      name: data.name,
-      matric_number: data.matric,
-      email: data.email,
-    });
-    return response.data; // { message, task_id }
-  },
+  // COS201 — blocks until task.get() resolves, returns { message, file_links }
+  generateAssignment: (data) => API.post('/generate/', {
+    token: data.token,
+    name: data.name,
+    matric_number: data.matric,
+    email: data.email,
+  }).then(r => r.data),
 
-  // Matches backend: GET /status/<task_id>/
-  checkStatus: async (taskId) => {
-    const response = await API.get(`/status/${taskId}/`);
-    return response.data; // { status: "pending"|"done"|"failed", file_links? }
-  },
+  // COS205 — same blocking pattern, returns { message, file_links }
+  generateAssignment205: (data) => API.post('/205/generate/', {
+    token: data.token,
+    name: data.name,
+    matric_number: data.matric,
+    email: data.email,
+  }).then(r => r.data),
 };
 
 export default API;

@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { assignmentAPI } from './api';
 
 const GenerateAssignmentPage = () => {
-  const [token, setToken]       = useState('');
-  const [name, setName]         = useState('');
-  const [matric, setMatric]     = useState('');
-  const [email, setEmail]       = useState('');
-  const [isLoading, setIsLoading]             = useState(false);
+  const [course, setCourse]   = useState('cos201');
+  const [token, setToken]     = useState('');
+  const [name, setName]       = useState('');
+  const [matric, setMatric]   = useState('');
+  const [email, setEmail]     = useState('');
+  const [isLoading, setIsLoading]               = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [error, setError]       = useState('');
+  const [error, setError]     = useState('');
   const [fileLinks, setFileLinks] = useState(null);
 
   const handleSubmit = async (e) => {
@@ -18,8 +19,11 @@ const GenerateAssignmentPage = () => {
     setIsLoading(true);
 
     try {
-      // Single call — blocks until backend finishes and returns file_links
-      const response = await assignmentAPI.generateAssignment({ token, name, matric, email });
+      // Both courses: single awaited call, blocks until backend task.get() resolves
+      const response = course === 'cos201'
+        ? await assignmentAPI.generateAssignment({ token, name, matric, email })
+        : await assignmentAPI.generateAssignment205({ token, name, matric, email });
+
       setFileLinks(response.file_links);
       setShowSuccessModal(true);
     } catch (err) {
@@ -31,11 +35,19 @@ const GenerateAssignmentPage = () => {
 
   const handleDownload = () => {
     if (!fileLinks) return;
-    const pdfUrl = fileLinks['COS201_ASSIGNMENT.pdf'];
-    if (pdfUrl) window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+    const key = course === 'cos201' ? 'COS201_ASSIGNMENT.pdf' : 'COS205_ASSIGNMENT.pdf';
+    const url = fileLinks[key];
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const closeModal = () => setShowSuccessModal(false);
+
+  const switchCourse = (c) => {
+    if (isLoading) return; // don't switch mid-generation
+    setCourse(c);
+    setError('');
+    setFileLinks(null);
+  };
 
   return (
     <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-gradient-mesh">
@@ -112,17 +124,40 @@ const GenerateAssignmentPage = () => {
           <h2 className="text-xl font-bold tracking-tight text-slate-100">Assignment Hub</h2>
           <div className="flex items-center gap-6">
             <nav className="hidden items-center gap-8 md:flex">
-              <a href="/assignment" className="border-b-2 border-primary pb-1 text-sm font-semibold text-primary">COS201</a>
-              <a href="#" className="text-sm font-medium text-slate-400 transition-colors hover:text-slate-100">CSC205</a>
+              {['cos201', 'cos205'].map(c => (
+                <button
+                  key={c}
+                  onClick={() => switchCourse(c)}
+                  className={`border-b-2 pb-1 text-sm font-semibold transition-colors ${
+                    course === c
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-slate-400 hover:text-slate-100'
+                  }`}
+                >
+                  {c === 'cos201' ? 'COS201' : 'CSC205'}
+                </button>
+              ))}
             </nav>
             <button className="flex h-10 w-10 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary transition-all hover:bg-primary/20">
               <span className="material-symbols-outlined text-xl">account_circle</span>
             </button>
           </div>
         </div>
+        {/* Mobile tabs */}
         <div className="mt-4 flex justify-center gap-6 md:hidden">
-          <a href="/assignment" className="text-sm font-medium text-primary border-b-2 border-primary pb-1">COS201</a>
-          <a href="#" className="text-sm font-medium text-slate-400 transition-colors hover:text-slate-100">CSC205</a>
+          {['cos201', 'cos205'].map(c => (
+            <button
+              key={c}
+              onClick={() => switchCourse(c)}
+              className={`text-sm font-medium transition-colors ${
+                course === c
+                  ? 'border-b-2 border-primary pb-1 text-primary'
+                  : 'text-slate-400'
+              }`}
+            >
+              {c === 'cos201' ? 'COS201' : 'CSC205'}
+            </button>
+          ))}
         </div>
       </header>
 
@@ -133,8 +168,14 @@ const GenerateAssignmentPage = () => {
 
         <div className="glass-card relative z-10 w-full max-w-[540px] rounded-xl p-8 shadow-2xl lg:p-10">
           <div className="mb-8 text-center">
-            <h1 className="mb-2 text-3xl font-bold tracking-tight text-white lg:text-4xl">Generate Assignment</h1>
-            <p className="text-sm text-slate-400">Fill in your details to auto-generate your course work</p>
+            <h1 className="mb-2 text-3xl font-bold tracking-tight text-white lg:text-4xl">
+              {course === 'cos201' ? 'COS201 Assignment' : 'CSC205 Assignment'}
+            </h1>
+            <p className="text-sm text-slate-400">
+              {course === 'cos201'
+                ? 'Multiple linear regression with dataset'
+                : 'Fourier analysis of energy demand'}
+            </p>
           </div>
 
           {error && (
@@ -222,7 +263,6 @@ const GenerateAssignmentPage = () => {
             </button>
           </form>
 
-          {/* Simple loading hint — no progress bar needed */}
           {isLoading && (
             <p className="mt-5 text-center text-sm text-slate-400 animate-pulse">
               This usually takes 30–60 seconds. Please keep this tab open.

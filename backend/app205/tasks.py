@@ -53,7 +53,7 @@ def generate_assignment205_task(token_str, name, matric_number, email):
 
         # 2. Dataset
         print("📊 Generating energy demand dataset...")
-        df, signal_padded, original_len, full_len = utils_205.generate_dataset()
+        df, signal_padded, original_len, full_len, demand_raw = utils_205.generate_dataset()
         dataset_path = os.path.join(job_dir, 'energy_demand.csv')
         df.to_csv(dataset_path, index=False)
 
@@ -69,7 +69,7 @@ def generate_assignment205_task(token_str, name, matric_number, email):
 
         # 4. DFT / FFT analysis + plots
         print("📈 Computing DFT and FFT...")
-        result_paths = utils_205.run_analysis(signal_padded, original_len, full_len, job_dir)
+        result_paths = utils_205.run_analysis(signal_padded, original_len, full_len, job_dir, demand_raw)
 
         # 5. Code + notebook
         impl_code = utils_205.get_implementation_code()

@@ -83,19 +83,24 @@ The tone should be natural, like a student explaining their understanding. Avoid
 
 # ---------- Load Dataset ----------
 def load_dataset():
-    """Load the lecturer's dataset and return full signal and hour numbers."""
     if not DATASET_PATH.exists():
         raise FileNotFoundError(f"Dataset not found at {DATASET_PATH}")
-
     df = pd.read_csv(DATASET_PATH)
+    if 'Balancing Authority' in df.columns:
+        top_ba = df['Balancing Authority'].value_counts().idxmax()
+        df = df[df['Balancing Authority'] == top_ba].copy()
     required = ['Hour Number', 'Demand (MW)']
     for col in required:
         if col not in df.columns:
             raise ValueError(f"Dataset missing required column: {col}")
-
+    df['Demand (MW)'] = pd.to_numeric(df['Demand (MW)'], errors='coerce')
+    df = df.dropna(subset=['Demand (MW)'])
+    if 'Data Date' in df.columns:
+        df['Data Date'] = pd.to_datetime(df['Data Date'], format='%m-%d-%y', errors='coerce')
+        df = df.sort_values(['Data Date', 'Hour Number']).reset_index(drop=True)
     hours  = df['Hour Number'].values
-    demand = df['Demand (MW)'].values
-    return hours, demand.tolist()
+    demand = df['Demand (MW)'].values.tolist()
+    return hours, demand
 
 def downsample(signal, target_len):
     if len(signal) <= target_len:
@@ -112,12 +117,14 @@ def pad_to_power_of_two(signal):
 def generate_dataset():
     hours, demand_full = load_dataset()
     full_len = len(demand_full)
-
     demand_downsampled = downsample(demand_full, MAX_FFT_POINTS)
-    signal_padded, original_len = pad_to_power_of_two(demand_downsampled)
-
-    df = pd.DataFrame({'hour': hours, 'demand': demand_full})
-    return df, signal_padded, original_len, full_len
+    # Mean-center so DC component does not dominate the frequency plots
+    mean_val = sum(demand_downsampled) / len(demand_downsampled)
+    demand_centered = [v - mean_val for v in demand_downsampled]
+    signal_padded, original_len = pad_to_power_of_two(demand_centered)
+    df = pd.DataFrame({'hour': list(hours[:full_len]), 'demand': demand_full})
+    # Also return raw downsampled (for the signal plot to show actual MW values)
+    return df, signal_padded, original_len, full_len, demand_downsampled
 
 # ---------- Serial DFT ----------
 def dft_serial(x):
@@ -170,7 +177,11 @@ def fft(x):
            [even[k] - T[k] for k in range(N // 2)]
 
 # ---------- Run Analysis + Plots ----------
-def run_analysis(signal_padded, original_len, full_len, output_dir):
+def run_analysis(signal_padded, original_len, full_len, output_dir, demand_raw=None):
+    """
+    signal_padded: mean-centered, power-of-2 length list (for transforms)
+    demand_raw:    original MW values for the signal plot (optional)
+    """
     N = len(signal_padded)
     x = [complex(val, 0) for val in signal_padded]
 
@@ -194,17 +205,22 @@ def run_analysis(signal_padded, original_len, full_len, output_dir):
     X_np = np.fft.fft(signal_padded)
     time_np = time.perf_counter() - start
 
-    # Magnitudes
+    # Magnitudes — skip index 0 (DC component) so the actual frequency
+    # content is visible. The DC term is just sum(signal) which is massive
+    # for energy demand data (MW scale) and dwarfs everything else.
     mag_dft_serial   = [abs(v) for v in X_dft_serial]
     mag_dft_parallel = [abs(v) for v in X_dft_parallel]
     mag_fft          = [abs(v) for v in X_fft]
     mag_np           = np.abs(X_np)
-    freqs            = np.arange(N)
 
-    # Plot 1: Original signal
+    half = N // 2
+    # Start from index 1 to skip DC; use indices 1..half
+    freqs_ac = np.arange(1, half)
+
+    # Plot 1: Original signal — use raw demand values if provided, else centered
+    plot_signal = demand_raw[:original_len] if demand_raw else signal_padded[:original_len]
     plt.figure(figsize=(8, 4))
-    plt.plot(range(original_len), signal_padded[:original_len],
-             marker='o', linestyle='-', color='blue', markersize=2)
+    plt.plot(range(original_len), plot_signal, linestyle='-', color='steelblue', linewidth=0.8)
     plt.title(f'Downsampled Energy Demand ({original_len} points from {full_len} total)')
     plt.xlabel('Sample Index')
     plt.ylabel('Demand (MW)')
@@ -213,11 +229,10 @@ def run_analysis(signal_padded, original_len, full_len, output_dir):
     plt.savefig(signal_path, dpi=100, bbox_inches='tight')
     plt.close()
 
-    # Plot 2: Serial DFT magnitude
+    # Plot 2: Serial DFT magnitude (AC only)
     plt.figure(figsize=(8, 4))
-    plt.stem(freqs[:N // 2], mag_dft_serial[:N // 2],
-             linefmt='b-', markerfmt='bo', basefmt='r-')
-    plt.title(f'Serial DFT Magnitude (time: {time_dft_serial:.4f} s)')
+    plt.plot(freqs_ac, mag_dft_serial[1:half], 'b-', linewidth=0.8)
+    plt.title(f'Serial DFT Magnitude – AC spectrum (time: {time_dft_serial:.4f} s)')
     plt.xlabel('Frequency Index')
     plt.ylabel('Magnitude')
     plt.grid(True, alpha=0.3)
@@ -225,11 +240,10 @@ def run_analysis(signal_padded, original_len, full_len, output_dir):
     plt.savefig(dft_serial_path, dpi=100, bbox_inches='tight')
     plt.close()
 
-    # Plot 3: Parallel DFT magnitude
+    # Plot 3: Parallel DFT magnitude (AC only)
     plt.figure(figsize=(8, 4))
-    plt.stem(freqs[:N // 2], mag_dft_parallel[:N // 2],
-             linefmt='m-', markerfmt='mo', basefmt='r-')
-    plt.title(f'Parallel DFT Magnitude ({NUM_THREADS} threads, time: {time_dft_parallel:.4f} s)')
+    plt.plot(freqs_ac, mag_dft_parallel[1:half], 'm-', linewidth=0.8)
+    plt.title(f'Parallel DFT Magnitude – {NUM_THREADS} threads (time: {time_dft_parallel:.4f} s)')
     plt.xlabel('Frequency Index')
     plt.ylabel('Magnitude')
     plt.grid(True, alpha=0.3)
@@ -237,11 +251,10 @@ def run_analysis(signal_padded, original_len, full_len, output_dir):
     plt.savefig(dft_parallel_path, dpi=100, bbox_inches='tight')
     plt.close()
 
-    # Plot 4: FFT magnitude
+    # Plot 4: FFT magnitude (AC only)
     plt.figure(figsize=(8, 4))
-    plt.stem(freqs[:N // 2], mag_fft[:N // 2],
-             linefmt='g-', markerfmt='go', basefmt='r-')
-    plt.title(f'FFT Magnitude (time: {time_fft:.4f} s)')
+    plt.plot(freqs_ac, mag_fft[1:half], 'g-', linewidth=0.8)
+    plt.title(f'FFT Magnitude – AC spectrum (time: {time_fft:.4f} s)')
     plt.xlabel('Frequency Index')
     plt.ylabel('Magnitude')
     plt.grid(True, alpha=0.3)
@@ -249,13 +262,13 @@ def run_analysis(signal_padded, original_len, full_len, output_dir):
     plt.savefig(fft_mag_path, dpi=100, bbox_inches='tight')
     plt.close()
 
-    # Plot 5: Comparison
+    # Plot 5: Comparison (AC only)
     plt.figure(figsize=(10, 5))
-    plt.plot(freqs[:N // 2], mag_dft_serial[:N // 2],   'b-',  label=f'Serial DFT {time_dft_serial:.4f}s')
-    plt.plot(freqs[:N // 2], mag_dft_parallel[:N // 2], 'm--', label=f'Parallel DFT {time_dft_parallel:.4f}s')
-    plt.plot(freqs[:N // 2], mag_fft[:N // 2],          'g-',  label=f'FFT {time_fft:.4f}s')
-    plt.plot(freqs[:N // 2], mag_np[:N // 2],           'r:',  label=f'NumPy FFT {time_np:.6f}s')
-    plt.title('Magnitude Spectrum Comparison')
+    plt.plot(freqs_ac, mag_dft_serial[1:half],   'b-',  linewidth=0.8, label=f'Serial DFT {time_dft_serial:.4f}s')
+    plt.plot(freqs_ac, mag_dft_parallel[1:half], 'm--', linewidth=0.8, label=f'Parallel DFT {time_dft_parallel:.4f}s')
+    plt.plot(freqs_ac, mag_fft[1:half],          'g-',  linewidth=0.8, label=f'FFT {time_fft:.4f}s')
+    plt.plot(freqs_ac, mag_np[1:half],           'r:',  linewidth=1.2, label=f'NumPy FFT {time_np:.6f}s')
+    plt.title('Magnitude Spectrum Comparison (DC removed)')
     plt.xlabel('Frequency Index')
     plt.ylabel('Magnitude')
     plt.legend()

@@ -17,11 +17,11 @@ import {
 import { tokenAPI } from './api';
 
 const TokenGenerationPage = () => {
+  const [course, setCourse] = useState('cos201'); // 'cos201' or 'cos205'
   const [latestToken, setLatestToken] = useState(null);
   const [copied, setCopied] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState('');
-  const [activeNav, setActiveNav] = useState('cos201');
   const [tokens, setTokens] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
 
@@ -33,14 +33,19 @@ const TokenGenerationPage = () => {
     };
   }, []);
 
-  // Load token history on mount
+  // Load token history when course changes
   useEffect(() => {
     loadTokenHistory();
-  }, []);
+  }, [course]);
 
   const loadTokenHistory = async () => {
     try {
-      const data = await tokenAPI.getAllTokens();
+      let data;
+      if (course === 'cos201') {
+        data = await tokenAPI.getAllTokens201();
+      } else {
+        data = await tokenAPI.getAllTokens205();
+      }
       setTokens(data);
     } catch (error) {
       console.error('Failed to load token history:', error);
@@ -52,8 +57,12 @@ const TokenGenerationPage = () => {
     setIsGenerating(true);
     
     try {
-      // Call the actual API to generate token
-      const response = await tokenAPI.generateToken();
+      let response;
+      if (course === 'cos201') {
+        response = await tokenAPI.generateToken201();
+      } else {
+        response = await tokenAPI.generateToken205();
+      }
       
       // Format token with # prefix if not already present
       const tokenValue = response.token.startsWith('#') 
@@ -89,7 +98,7 @@ const TokenGenerationPage = () => {
 
   return (
     <div className="min-h-screen bg-background-light font-display text-slate-900 dark:bg-background-dark dark:text-slate-100">
-      {/* Top Navigation Bar */}
+      {/* Top Navigation Bar with course tabs */}
       <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/5 px-6 py-4 backdrop-blur-md dark:border-primary/10 dark:bg-background-dark/50 lg:px-40">
         <div className="mx-auto flex max-w-[1200px] items-center justify-between">
           <div className="flex items-center gap-3">
@@ -99,17 +108,17 @@ const TokenGenerationPage = () => {
           <div className="flex items-center gap-8">
             <nav className="hidden items-center gap-8 md:flex">
               <button
-                onClick={() => setActiveNav('cos201')}
+                onClick={() => setCourse('cos201')}
                 className={`text-sm font-medium transition-colors hover:text-primary ${
-                  activeNav === 'cos201' ? 'text-primary' : 'text-slate-400'
+                  course === 'cos201' ? 'border-b-2 border-primary pb-1 text-primary' : 'text-slate-400'
                 }`}
               >
                 COS201
               </button>
               <button
-                onClick={() => setActiveNav('csc205')}
+                onClick={() => setCourse('cos205')}
                 className={`text-sm font-medium transition-colors hover:text-primary ${
-                  activeNav === 'csc205' ? 'text-primary' : 'text-slate-400'
+                  course === 'cos205' ? 'border-b-2 border-primary pb-1 text-primary' : 'text-slate-400'
                 }`}
               >
                 CSC205
@@ -125,17 +134,17 @@ const TokenGenerationPage = () => {
         {/* Mobile Navigation */}
         <div className="mt-4 flex justify-center gap-6 md:hidden">
           <button
-            onClick={() => setActiveNav('cos201')}
+            onClick={() => setCourse('cos201')}
             className={`text-sm font-medium transition-colors ${
-              activeNav === 'cos201' ? 'text-primary' : 'text-slate-400'
+              course === 'cos201' ? 'border-b-2 border-primary pb-1 text-primary' : 'text-slate-400'
             }`}
           >
             COS201
           </button>
           <button
-            onClick={() => setActiveNav('csc205')}
+            onClick={() => setCourse('cos205')}
             className={`text-sm font-medium transition-colors ${
-              activeNav === 'csc205' ? 'text-primary' : 'text-slate-400'
+              course === 'cos205' ? 'border-b-2 border-primary pb-1 text-primary' : 'text-slate-400'
             }`}
           >
             CSC205
@@ -151,12 +160,11 @@ const TokenGenerationPage = () => {
           </div>
 
           <h1 className="mb-3 text-3xl font-black tracking-tight text-white md:text-4xl lg:mb-4 lg:text-5xl">
-            Token Management
+            Token Management – {course === 'cos201' ? 'COS201' : 'CSC205'}
           </h1>
 
           <p className="mb-8 max-w-lg text-base text-slate-400 md:mb-10 md:text-lg">
-            Generate secure access tokens for student assignments. Each token is unique and
-            trackable.
+            Generate secure access tokens for {course === 'cos201' ? 'COS201' : 'CSC205'} assignments. Each token is unique and trackable.
           </p>
 
           {/* Error Message */}
@@ -180,7 +188,7 @@ const TokenGenerationPage = () => {
                 className="transition-transform group-hover:rotate-90"
               />
             )}
-            {isGenerating ? 'Generating...' : 'Generate New Token'}
+            {isGenerating ? 'Generating...' : `Generate New ${course.toUpperCase()} Token`}
           </button>
         </div>
 
@@ -196,11 +204,12 @@ const TokenGenerationPage = () => {
 
             <div className="flex flex-col items-center gap-4 md:gap-6">
               <p className="text-center text-xs font-medium uppercase tracking-[0.2em] text-slate-400 md:text-sm">
-                Latest Generated Token
+                Latest Generated {course.toUpperCase()} Token
               </p>
 
-              <div className="group relative flex w-full max-w-md items-center justify-between gap-2 rounded-2xl border border-primary/20 bg-background-dark/40 p-4 backdrop-blur-sm md:p-4">
-                <span className="token-glow font-mono text-l font-black tracking-widest text-primary md:text-2l lg:text-3l">
+              {/* Token and copy button - now with flex-wrap */}
+              <div className="group relative flex w-full max-w-md flex-wrap items-center justify-center gap-2 rounded-2xl border border-primary/20 bg-background-dark/40 p-4 backdrop-blur-sm md:flex-nowrap md:justify-between md:p-4">
+                <span className="token-glow font-mono text-base font-black tracking-widest text-primary break-all text-center md:text-2xl lg:text-3xl">
                   {latestToken}
                 </span>
 
@@ -211,7 +220,6 @@ const TokenGenerationPage = () => {
                 >
                   <FontAwesomeIcon icon={copied ? faCheck : faCopy} className="text-lg md:text-xl" />
 
-                  {/* Toast notification */}
                   <div
                     className={`absolute -top-12 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-slate-800 px-3 py-2 text-xs text-white transition-opacity ${
                       copied ? 'opacity-100' : 'opacity-0'
@@ -223,7 +231,7 @@ const TokenGenerationPage = () => {
               </div>
 
               {/* Token Stats */}
-              <div className="mt-2 flex gap-6 text-xs text-slate-400">
+              <div className="mt-2 flex flex-wrap justify-center gap-4 text-xs text-slate-400 md:gap-6">
                 <div className="flex items-center gap-2">
                   <FontAwesomeIcon icon={faKey} className="text-primary" />
                   <span>8-character secure token</span>
@@ -236,7 +244,6 @@ const TokenGenerationPage = () => {
             </div>
           </div>
         )}
-
         {/* Quick Actions */}
         <div className="mt-8 flex justify-center gap-4">
           <button
@@ -255,7 +262,7 @@ const TokenGenerationPage = () => {
         {/* Token History Section */}
         {showHistory && tokens.length > 0 && (
           <div className="mt-8">
-            <h3 className="mb-4 text-lg font-bold text-white">Recent Tokens</h3>
+            <h3 className="mb-4 text-lg font-bold text-white">Recent {course.toUpperCase()} Tokens</h3>
             <div className="space-y-2">
               {tokens.slice(0, 5).map((token, index) => (
                 <div
@@ -272,7 +279,6 @@ const TokenGenerationPage = () => {
                           ? token.token.substring(1) 
                           : token.token;
                         navigator.clipboard.writeText(tokenToCopy);
-                        // Optional: Show temporary copied state for history items
                       }}
                       className="text-slate-500 hover:text-primary transition-colors"
                       title="Copy token"
