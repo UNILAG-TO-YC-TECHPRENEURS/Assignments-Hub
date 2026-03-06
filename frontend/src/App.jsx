@@ -25,7 +25,7 @@ function Navigation() {
 export default function App() {
   return (
     <Router>
-      <Navigation />
+      {/* <Navigation /> */}
       <Routes>
         <Route path="/muslim" element={<TokenGenerationPage />} />
         <Route path="/assignment" element={<GenerateAssignmentPage />} />
