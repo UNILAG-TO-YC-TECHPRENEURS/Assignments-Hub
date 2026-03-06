@@ -121,7 +121,19 @@ def generate_assignment205_task(token_str, name, matric_number, email):
             save_path=pdf_path,
         )
 
-        # 7. Upload to Cloudinary
+        # 7. Create ZIP archive
+        print("📦 Creating ZIP archive...")
+        all_files = [
+            pdf_path, flowchart_dft_path, flowchart_fft_path,
+            result_paths['signal'], result_paths['dft_serial_mag'],
+            result_paths['dft_parallel_mag'], result_paths['fft_mag'],
+            result_paths['comparison'], notebook_path, dataset_path
+        ]
+        zip_path = os.path.join(job_dir, f"COS205_Assignment_{safe_email}.zip")
+        create_zip_archive(all_files, zip_path)
+        print(f"✅ ZIP archive created: {zip_path}")
+
+        # 8. Upload all files (including ZIP) to Cloudinary
         print("☁️  Uploading files to Cloudinary...")
         cloudinary.config(
             cloud_name=settings.CLOUDINARY_CLOUD_NAME,
@@ -140,6 +152,7 @@ def generate_assignment205_task(token_str, name, matric_number, email):
             ("comparison.png",           result_paths['comparison'],       "image", f"{prefix}/comparison"),
             ("solution_205.ipynb",       notebook_path,                    "raw",   f"{prefix}/solution_205"),
             ("energy_demand.csv",        dataset_path,                     "raw",   f"{prefix}/energy_demand"),
+            ("COS205_Assignment.zip",    zip_path,                         "raw",   f"{prefix}/COS205_Assignment"),
         ]
 
         file_links = {}
@@ -154,25 +167,13 @@ def generate_assignment205_task(token_str, name, matric_number, email):
             file_links[display_name] = result["secure_url"]
             print(f"  ✅ {display_name} → {result['secure_url']}")
 
-        # 8. Save to DB
+        # 9. Save to DB
         token_obj.used = True
         token_obj.used_by_email = email
         token_obj.file_links = file_links
         token_obj.task_status = Token205.AssignmentStatus.DONE
         token_obj.save(update_fields=['used', 'used_by_email', 'file_links', 'task_status'])
         print("✅ file_links saved to DB.")
-
-        # 9. Create ZIP archive
-        print("📦 Creating ZIP archive...")
-        all_files = [
-            pdf_path, flowchart_dft_path, flowchart_fft_path,
-            result_paths['signal'], result_paths['dft_serial_mag'],
-            result_paths['dft_parallel_mag'], result_paths['fft_mag'],
-            result_paths['comparison'], notebook_path, dataset_path
-        ]
-        zip_path = os.path.join(job_dir, f"COS205_Assignment_{safe_email}.zip")
-        create_zip_archive(all_files, zip_path)
-        print(f"✅ ZIP archive created: {zip_path}")
 
         # 10. Send email with ZIP attachment
         print(f"📧 Sending email to {email}...")

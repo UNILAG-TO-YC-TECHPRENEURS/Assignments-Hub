@@ -58,7 +58,7 @@ Good luck with your studies!
     msg.attach_alternative(body_html, "text/html")
     # Attach the zip file
     with open(zip_path, 'rb') as f:
-        msg.attach(f"COS201_Assignment_{student_name}.zip", f.read(), 'application/zip')
+        msg.attach(f"{course}_Assignment_{student_name}.zip", f.read(), 'application/zip')
     msg.send(fail_silently=False)
 
 
@@ -138,10 +138,20 @@ def generate_assignment_task(token_str, name, matric_number, email):
             save_path=pdf_path,
         )
 
-        # 8. Upload to Cloudinary (keep for frontend)
+        # 8. Create ZIP archive (before uploading so we can upload it too)
+        print("📦 Creating ZIP archive...")
+        all_files = [
+            pdf_path, flowchart_q1_path, flowchart_q2_path,
+            result_q1_path, result_q2_path, notebook_path, dataset_path
+        ]
+        safe_email = email.replace('@', '_at_').replace('.', '_dot_')
+        zip_path = os.path.join(job_dir, f"COS201_Assignment_{safe_email}.zip")
+        create_zip_archive(all_files, zip_path)
+        print(f"✅ ZIP archive created: {zip_path}")
+
+        # 9. Upload all files (including ZIP) to Cloudinary
         print("☁️  Uploading files to Cloudinary...")
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-        safe_email = email.replace('@', '_at_').replace('.', '_dot_')
         prefix = f"{safe_email}_{ts}"
 
         cloudinary.config(
@@ -158,6 +168,7 @@ def generate_assignment_task(token_str, name, matric_number, email):
             ("result_q2.png",         result_q2_path,    "image", f"{prefix}/result_q2"),
             ("solution.ipynb",        notebook_path,     "raw",   f"{prefix}/solution"),
             ("dataset.csv",           dataset_path,      "raw",   f"{prefix}/dataset"),
+            ("COS201_Assignment.zip", zip_path,          "raw",   f"{prefix}/COS201_Assignment"),
         ]
 
         file_links = {}
@@ -172,7 +183,7 @@ def generate_assignment_task(token_str, name, matric_number, email):
             file_links[display_name] = result["secure_url"]
             print(f"  ✅ {display_name} → {result['secure_url']}")
 
-        # 9. Save to DB (for frontend)
+        # 10. Save to DB (for frontend)
         token_obj.used = True
         token_obj.used_by_email = email
         token_obj.file_links = file_links
@@ -180,17 +191,7 @@ def generate_assignment_task(token_str, name, matric_number, email):
         token_obj.save(update_fields=['used', 'used_by_email', 'file_links', 'task_status'])
         print("✅ file_links saved to DB.")
 
-        # 10. Create ZIP archive of all generated files
-        print("📦 Creating ZIP archive...")
-        all_files = [
-            pdf_path, flowchart_q1_path, flowchart_q2_path,
-            result_q1_path, result_q2_path, notebook_path, dataset_path
-        ]
-        zip_path = os.path.join(job_dir, f"COS201_Assignment_{safe_email}.zip")
-        create_zip_archive(all_files, zip_path)
-        print(f"✅ ZIP archive created: {zip_path}")
-
-        # 11. Send email with ZIP attachment
+        # 11. Send email with ZIP attachment (the same ZIP, still available locally)
         print(f"📧 Sending email to {email}...")
         try:
             send_assignment_email(to_email=email, student_name=name, zip_path=zip_path, course="COS201")

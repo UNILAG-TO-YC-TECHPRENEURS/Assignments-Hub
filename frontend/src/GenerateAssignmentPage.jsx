@@ -33,11 +33,12 @@ const GenerateAssignmentPage = () => {
     }
   };
 
-  const handleDownload = () => {
+  // Handle download of the complete ZIP archive
+  const handleDownloadZip = () => {
     if (!fileLinks) return;
-    const key = course === 'cos201' ? 'COS201_ASSIGNMENT.pdf' : 'COS205_ASSIGNMENT.pdf';
-    const url = fileLinks[key];
-    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    const zipKey = course === 'cos201' ? 'COS201_Assignment.zip' : 'COS205_Assignment.zip';
+    const zipUrl = fileLinks[zipKey];
+    if (zipUrl) window.open(zipUrl, '_blank', 'noopener,noreferrer');
   };
 
   const closeModal = () => setShowSuccessModal(false);
@@ -72,15 +73,17 @@ const GenerateAssignmentPage = () => {
               </div>
 
               <div className="mt-2 flex w-full flex-col gap-3">
+                {/* Main download button – now downloads the ZIP archive */}
                 <button
-                  onClick={handleDownload}
+                  onClick={handleDownloadZip}
                   disabled={!fileLinks}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-6 py-4 text-lg font-bold text-slate-950 transition-all hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <span className="material-symbols-outlined">download</span>
-                  Download PDF
+                  <span className="material-symbols-outlined">folder_zip</span>
+                  Download ZIP
                 </button>
 
+                {/* List of all individual files (still available) */}
                 {fileLinks && Object.keys(fileLinks).length > 1 && (
                   <div className="w-full rounded-xl border border-slate-700 bg-slate-800/50 p-4 text-left">
                     <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">All files</p>
@@ -252,11 +255,11 @@ const GenerateAssignmentPage = () => {
               {isLoading ? (
                 <>
                   <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                  <span>Generating your assignment...</span>
+                  <span>Solving your assignment...</span>
                 </>
               ) : (
                 <>
-                  <span>Generate Assignment</span>
+                  <span>Generate Assignment Solution</span>
                   <span className="material-symbols-outlined transition-transform group-hover:translate-x-1">auto_fix_high</span>
                 </>
               )}
