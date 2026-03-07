@@ -108,7 +108,7 @@ def generate_assignment_task(token_str, name, matric_number, email):
         utils.generate_result_plot_q1(df, model, X, y, result_q1_path)
 
         result_q2_path = os.path.join(job_dir, 'result_q2.png')
-        utils.generate_result_q2(result_q2_path)
+        utils.generate_result_plot_q2(result_q2_path)
 
         # 5. Code
         impl_q1 = utils.get_implementation_code_q1('dataset.csv')

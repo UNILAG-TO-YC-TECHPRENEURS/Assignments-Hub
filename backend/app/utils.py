@@ -1,4 +1,4 @@
-"""Utility functions for assignment generation"""
+"""Utility functions for assignment generation - Anti-Plagiarism Version"""
 import os
 import io
 import base64
@@ -8,10 +8,11 @@ import re
 from pathlib import Path
 from datetime import datetime
 
-# Set matplotlib backend FIRST - before any other imports
 import matplotlib
-matplotlib.use('Agg')  # Must be before importing pyplot
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from matplotlib.patches import FancyBboxPatch
 
 import pandas as pd
 import numpy as np
@@ -22,529 +23,584 @@ import nbformat as nbf
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
-from reportlab.platypus import Paragraph, Spacer, Image, PageBreak
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch, cm
-from PIL import Image as PILImage
-
+from reportlab.platypus import Paragraph
+from reportlab.lib.styles import ParagraphStyle
 from openai import OpenAI
 from django.conf import settings
 
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
-# ---------- Text Cleaning Helper ----------
+
+# ---------- Constants (used by tasks.py as utils.ALGORITHM_Q1 / Q2) ----------
+ALGORITHM_Q1 = "\n".join([
+    "Step 1: Start",
+    "Step 2: Import required libraries (pandas, sklearn.linear_model, matplotlib)",
+    "Step 3: Define function read_file(filename) with try-except for FileNotFoundError",
+    "Step 4: Load dataset from CSV (>=300 rows)",
+    "Step 5: Separate features (X) and target (y)",
+    "Step 6: Create LinearRegression object",
+    "Step 7: Fit model using X and y",
+    "Step 8: Predict using X",
+    "Step 9: Print first 10 predictions",
+    "Step 10: Plot actual vs predicted and save image",
+    "Step 11: End",
+])
+
+ALGORITHM_Q2 = "\n".join([
+    "Step 1: Start",
+    "Step 2: Define function read_file(filename)",
+    "Step 3: Try to open file in read mode",
+    "Step 4: If file exists, read content and return it",
+    "Step 5: If FileNotFoundError occurs, print custom error message",
+    "Step 6: End",
+])
+
+
+# ---------- Dynamic Algorithm Variants (randomised per student) ----------
+def get_dynamic_algo_q1():
+    steps = [
+        ["Start", "Begin process", "Initialize"],
+        ["Import libraries (pandas, sklearn, matplotlib)", "Load necessary Python modules", "Call required packages"],
+        ["Define file reading utility", "Create read_file function with error handling", "Setup data ingestion helper"],
+        ["Load 300+ row dataset", "Import CSV data (min 300 records)", "Read regression data from source"],
+        ["Split features and target", "Divide data into X and y variables", "Separate independent and dependent variables"],
+        ["Initialize LinearRegression", "Create the regression object", "Setup the ML model"],
+        ["Fit model to data", "Train the regressor", "Execute the learning process"],
+        ["Generate predictions", "Run prediction on dataset", "Apply model to X values"],
+        ["Show sample results", "Print top 10 predictions", "Display output headers"],
+        ["Generate and save visualization", "Plot actual vs predicted results", "Create performance graph"],
+        ["End", "Finish", "Terminate"],
+    ]
+    return "\n".join([f"Step {i+1}: {random.choice(s)}" for i, s in enumerate(steps)])
+
+
+def get_dynamic_algo_q2():
+    steps = [
+        ["Start", "Initialization"],
+        ["Define read_file(filename)", "Create the file input function"],
+        ["Open file in read mode", "Initiate 'with open' block"],
+        ["Handle existence check", "Verify if file path is valid"],
+        ["Return content or show error", "Output text or print custom failure message"],
+        ["End", "Finish"],
+    ]
+    return "\n".join([f"Step {i+1}: {random.choice(s)}" for i, s in enumerate(steps)])
+
+
+# ---------- Text Cleaning ----------
 def clean_analysis_text(text):
-    """Remove markdown formatting from analysis text."""
     if not text:
         return text
-    text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)      # **bold**
-    text = re.sub(r'\*(.*?)\*', r'\1', text)          # *italic*
-    text = re.sub(r'__(.*?)__', r'\1', text)          # __bold__
-    text = re.sub(r'_(.*?)_', r'\1', text)            # _italic_
-    text = re.sub(r'`{1,3}(.*?)`{1,3}', r'\1', text)  # `code`
-    text = re.sub(r'^#+\s*', '', text, flags=re.MULTILINE)  # headers
-    text = re.sub(r'\s+', ' ', text)                  # multiple spaces
-    text = text.replace('\\*', '*')
-    if text and not text[-1] in '.!?':
-        text += '.'
+    text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
+    text = re.sub(r'\*(.*?)\*', r'\1', text)
+    text = re.sub(r'`{1,3}(.*?)`{1,3}', r'\1', text)
+    text = re.sub(r'^#+\s*', '', text, flags=re.MULTILINE)
+    text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
-# ---------- OpenAI Analysis Generators ----------
+
+# ---------- OpenAI Generators ----------
 def generate_analysis_q1():
-    prompt = """You are helping a Nigerian university student write the analysis section of a COS 201 assignment.
-Write in a natural human tone. It must sound like a real student explaining their approach.
-IMPORTANT: Do NOT use any markdown formatting like **bold**, *italic*, or `code` in your response. Write in plain text only.
-The assignment problem is:
-"Use Python to develop a multiple linear regression model using a dataset with at least 300 rows."
-Write the analysis explaining:
-- the step by step approach
-- libraries that will be used
-- how the regression model works
-- assumptions
-- constraints
-The writing must feel original and human.
-Length: 200–300 words."""
-    
+    tones = ["enthusiastic", "straightforward", "highly technical", "simplified", "first-person narrative"]
+    prompt = f"""You are a Nigerian university student writing a COS 201 assignment.
+Write the analysis for a Multiple Linear Regression project (300+ rows).
+Tone: {random.choice(tones)}.
+Explain: libraries, steps, model logic, and assumptions.
+IMPORTANT: NO MARKDOWN. Plain text only.
+Length: 220-280 words."""
     response = client.chat.completions.create(
         model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "You are a Nigerian university student. Write in plain text only - no markdown formatting, no asterisks, no backticks."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.7,
-        max_tokens=500
+        messages=[{"role": "system", "content": "Plain text only student persona."},
+                  {"role": "user", "content": prompt}],
+        temperature=0.9,
     )
-    raw_text = response.choices[0].message.content
-    return clean_analysis_text(raw_text)
+    return clean_analysis_text(response.choices[0].message.content)
+
 
 def generate_analysis_q2():
-    prompt = """You are helping a Nigerian student write the analysis section of a programming assignment.
-The task is to write a Python function that reads a file and returns its contents while handling file not found errors.
-Explain the step by step plan for implementing the solution.
-IMPORTANT: Do NOT use any markdown formatting like **bold**, *italic*, or `code` in your response. Write in plain text only.
-The tone must sound natural, simple, and like it was written by a student.
-Length: around 150–250 words."""
-    
+    tones = ["enthusiastic", "straightforward", "highly technical", "simplified", "first-person narrative"]
+    prompt = f"""You are a Nigerian university student writing a COS 201 assignment.
+Write the analysis for a Python file reading function with FileNotFoundError handling.
+Tone: {random.choice(tones)}.
+Explain: the function, try-except block, and return values.
+IMPORTANT: NO MARKDOWN. Plain text only. NO numbered lists. Flowing paragraphs only.
+Length: 150-200 words."""
     response = client.chat.completions.create(
         model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "You are a Nigerian university student. Write in plain text only - no markdown formatting, no asterisks, no backticks."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.7,
-        max_tokens=400
+        messages=[{"role": "system", "content": "Plain text only student persona."},
+                  {"role": "user", "content": prompt}],
+        temperature=0.9,
     )
-    raw_text = response.choices[0].message.content
-    return clean_analysis_text(raw_text)
+    return clean_analysis_text(response.choices[0].message.content)
 
-# ---------- Dataset - Truly Random Each Time ----------
+
+# ---------- Dataset Generation ----------
 def generate_dataset(n_samples=350, n_features=3, noise=0.1):
-    """Generate a random dataset for regression. Each call produces different data."""
+    actual_samples = n_samples + random.randint(-50, 100)
+    actual_features = n_features + random.randint(0, 3)
+    X, y = make_regression(
+        n_samples=actual_samples,
+        n_features=actual_features,
+        noise=noise,
+        random_state=random.randint(1, 10000),
+    )
+    prefixes = ['val', 'metric', 'feature', 'input', 'data', 'obs']
+    feature_names = [f'{random.choice(prefixes)}_{i}' for i in range(actual_features)]
+    df = pd.DataFrame(X, columns=feature_names)
+    df['target'] = y
+    return df
+
+
+# ---------- Implementation Code ----------
+def get_implementation_code_q1(dataset_filename='dataset.csv'):
+    """Returns randomised but correct Q1 implementation code as a string."""
+    model_var = random.choice(['regressor', 'lr_model', 'model', 'lin_reg'])
+    pred_var  = random.choice(['predictions', 'y_pred', 'preds', 'y_hat'])
+    df_var    = random.choice(['df', 'data', 'df_assignment', 'dataset'])
+
+    return f"""import pandas as pd
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
+
+
+def read_file(filename):
     try:
-        actual_samples = n_samples + random.randint(-20, 50)
-        actual_features = n_features + random.randint(0, 2)
-        actual_noise = noise * random.uniform(0.5, 2.0)
-        
-        print(f"Generating dataset with: samples={actual_samples}, features={actual_features}, noise={actual_noise:.4f}")
-        
-        X, y = make_regression(
-            n_samples=actual_samples,
-            n_features=actual_features,
-            noise=actual_noise,
-            random_state=None,
-            bias=random.uniform(-50, 50)
-        )
-        
-        # Create random feature names
-        prefixes = ['age', 'income', 'score', 'rate', 'count', 'value', 'factor', 'index', 'weight', 'height']
-        feature_names = [f'{random.choice(prefixes)}_{random.randint(100,999)}' for _ in range(actual_features)]
-        
-        df = pd.DataFrame(X, columns=feature_names)
-        df['target'] = y
-        df = df.sample(frac=1).reset_index(drop=True)  # shuffle
-        
-        if df.empty or len(df) < 300:
-            raise ValueError(f"Invalid dataset: {len(df)} rows")
-        
-        print(f"✅ Dataset generated: {df.shape[0]} rows, {df.shape[1]-1} features")
-        return df
-        
-    except Exception as e:
-        print(f"❌ Error generating dataset: {e}. Using fallback.")
-        X, y = make_regression(n_samples=350, n_features=3, noise=0.1, random_state=42)
-        df = pd.DataFrame(X, columns=['feature_1', 'feature_2', 'feature_3'])
-        df['target'] = y
-        return df
+        with open(filename, "r") as file:
+            return file.read()
+    except FileNotFoundError:
+        print("Custom Message: File not found. Please ensure the dataset exists.")
 
-# ---------- Flowcharts with Correct Shapes ----------
+
+# Loading the dataset
+{df_var} = pd.read_csv("{dataset_filename}")
+print(f"Dataset shape: {{{df_var}.shape}}")
+print(f"Columns: {{list({df_var}.columns)}}")
+print(f"First few rows:\\n{{{df_var}.head()}}")
+
+# Feature and target selection
+feature_cols = [col for col in {df_var}.columns if col != 'target']
+X = {df_var}[feature_cols]
+y = {df_var}['target']
+
+# Model training
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+{model_var} = LinearRegression()
+{model_var}.fit(X_train, y_train)
+{pred_var} = {model_var}.predict(X)
+
+print("First 10 predictions:", {pred_var}[:10])
+print(f"Model coefficients: {{{model_var}.coef_}}")
+print(f"Model intercept: {{{model_var}.intercept_:.4f}}")
+print(f"R\\u00b2 score: {{{model_var}.score(X, y):.4f}}")
+
+# Visualising results
+plt.figure(figsize=(8, 6))
+plt.scatter(y, {pred_var}, alpha=0.6, color='blue', edgecolors='k')
+plt.plot([y.min(), y.max()], [y.min(), y.max()], 'r--', linewidth=2)
+plt.title("Actual vs Predicted Values")
+plt.xlabel("Actual Values")
+plt.ylabel("Predicted Values")
+plt.grid(True, alpha=0.3)
+plt.savefig("result_q1.png")
+plt.show()
+"""
+
+
+def get_implementation_code_q2():
+    """Returns randomised but correct Q2 implementation code as a string."""
+    func_name    = random.choice(['read_file', 'load_file', 'get_file_content'])
+    param_name   = random.choice(['filename', 'filepath', 'fname', 'file_path'])
+    content_var  = random.choice(['content', 'file_content', 'text', 'data'])
+    error_prefix = random.choice([
+        "Custom Message: The file",
+        "Error: File",
+        "Custom Error: Could not find",
+    ])
+
+    return f"""def {func_name}({param_name}):
+    try:
+        with open({param_name}, "r") as file:
+            {content_var} = file.read()
+            print(f"File '{{{param_name}}}' read successfully!")
+            return {content_var}
+    except FileNotFoundError:
+        print(f"{error_prefix} '{{{param_name}}}' does not exist. Please check the filename.")
+        return None
+
+
+print("Test 1: Reading an existing file")
+{content_var} = {func_name}("sample.txt")
+if {content_var}:
+    print(f"File content length: {{len({content_var})}} characters")
+    print("First 100 characters:", {content_var}[:100])
+
+print("\\nTest 2: Reading a non-existent file")
+{content_var} = {func_name}("nonexistent.txt")
+"""
+
+
+# ---------- Notebook Creation ----------
+def create_notebook(impl_q1: str, impl_q2: str, save_path: str):
+    """Creates a Jupyter notebook with Q1 and Q2 implementation cells."""
+    nb = nbf.v4.new_notebook()
+    nb.cells = [
+        nbf.v4.new_markdown_cell("# COS 201 Assignment\n## Question 1: Multiple Linear Regression"),
+        nbf.v4.new_code_cell(impl_q1),
+        nbf.v4.new_markdown_cell("## Question 2: File Reading with Error Handling"),
+        nbf.v4.new_code_cell(impl_q2),
+    ]
+    with open(save_path, 'w') as f:
+        nbf.write(nb, f)
+
+
+# ---------- Flowchart Q1 — Matplotlib (BIG, full page) ----------
 def create_flowchart_q1():
-    dot = graphviz.Digraph('flowchart_q1', format='png')
-    dot.attr(rankdir='TB', size='8,5')
-    
-    dot.node('A', 'Start', shape='ellipse')
-    dot.node('B', 'Import libraries\n(pandas, sklearn, matplotlib)', shape='rectangle')
-    dot.node('C', 'Define read_file()\n(handles FileNotFound)', shape='rectangle')
-    dot.node('D', 'Load dataset (≥300 rows)', shape='parallelogram')  # Input
-    dot.node('E', 'Split features (X) and target (y)', shape='rectangle')
-    dot.node('F', 'Create LinearRegression model', shape='rectangle')
-    dot.node('G', 'Fit model on data', shape='rectangle')
-    dot.node('H', 'Make predictions', shape='rectangle')
-    dot.node('I', 'Plot actual vs predicted', shape='rectangle')
-    dot.node('J', 'Print first 10 predictions', shape='parallelogram')  # Output
-    dot.node('K', 'End', shape='ellipse')
-    
-    dot.edges(['AB', 'BC', 'CD', 'DE', 'EF', 'FG', 'GH', 'HI', 'IJ', 'JK'])
-    return dot.pipe(format='png')
+    """
+    Returns raw PNG bytes of the Q1 flowchart.
+    Uses matplotlib for full size control — fills ~85% of A4 page, never squashed.
+    Visual variety from randomised colour themes per student.
+    """
+    themes = [
+        ('#e1f5fe', '#1a237e'),
+        ('#f1f8e9', '#1b5e20'),
+        ('#fff3e0', '#bf360c'),
+        ('#f3e5f5', '#4a148c'),
+        ('#fce4ec', '#880e4f'),
+        ('#e8f5e9', '#2e7d32'),
+    ]
+    fill_color, border_color = random.choice(themes)
 
+    fig, ax = plt.subplots(figsize=(12, 18), dpi=150)
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 22)
+    ax.axis('off')
+    fig.patch.set_facecolor('white')
+    ax.set_facecolor('white')
+
+    nodes = [
+        ('Start',                                           5, 21.0, 'ellipse'),
+        ('Import Libraries\n(Pandas, Sklearn, Matplotlib)', 5, 19.0, 'rect'),
+        ('Define Data Loading &\nError Handling Functions', 5, 17.0, 'rect'),
+        ('Load Dataset\n(300+ Rows)',                       5, 15.0, 'para'),
+        ('Preprocess & Split\nFeatures / Target',           5, 13.0, 'rect'),
+        ('Initialize Linear\nRegression Model',             5, 11.0, 'rect'),
+        ('Fit Model to\nTraining Data',                     5,  9.0, 'rect'),
+        ('Generate Predictions',                            5,  7.0, 'rect'),
+        ('Compute Metrics &\nCreate Visualizations',        5,  5.0, 'rect'),
+        ('Display Results &\nSave Plot',                    5,  3.0, 'para'),
+        ('End',                                             5,  1.0, 'ellipse'),
+    ]
+
+    box_w = 4.4
+    box_h = 1.1
+
+    for label, cx, cy, shape in nodes:
+        x = cx - box_w / 2
+        y = cy - box_h / 2
+
+        if shape == 'ellipse':
+            ax.add_patch(mpatches.Ellipse(
+                (cx, cy), box_w * 0.65, box_h * 1.15,
+                facecolor=fill_color, edgecolor=border_color, linewidth=2.5, zorder=3,
+            ))
+        elif shape == 'rect':
+            ax.add_patch(FancyBboxPatch(
+                (x, y), box_w, box_h,
+                boxstyle='round,pad=0.06',
+                facecolor=fill_color, edgecolor=border_color, linewidth=2.5, zorder=3,
+            ))
+        elif shape == 'para':
+            skew = 0.22
+            ax.add_patch(plt.Polygon([
+                (x + skew,         y),
+                (x + box_w + skew, y),
+                (x + box_w - skew, y + box_h),
+                (x - skew,         y + box_h),
+            ], facecolor=fill_color, edgecolor=border_color, linewidth=2.5, zorder=3))
+
+        ax.text(cx, cy, label, ha='center', va='center',
+                fontsize=12, zorder=4, multialignment='center')
+
+    for i in range(len(nodes) - 1):
+        _, cx1, cy1, _ = nodes[i]
+        _, cx2, cy2, _ = nodes[i + 1]
+        ax.annotate('',
+                    xy=(cx2, cy2 + box_h / 2 + 0.05),
+                    xytext=(cx1, cy1 - box_h / 2 - 0.05),
+                    arrowprops=dict(arrowstyle='->', color=border_color, lw=2.5),
+                    zorder=2)
+
+    plt.tight_layout(pad=0.3)
+    buf = io.BytesIO()
+    plt.savefig(buf, dpi=150, bbox_inches='tight', facecolor='white', format='png')
+    plt.close()
+    buf.seek(0)
+    return buf.read()
+
+
+# ---------- Flowchart Q2 — graphviz ----------
 def create_flowchart_q2():
+    """Returns raw PNG bytes for Q2 flowchart."""
     dot = graphviz.Digraph('flowchart_q2', format='png')
-    dot.attr(rankdir='TB', size='8,5')
-    
-    dot.node('A', 'Start', shape='ellipse')
-    dot.node('B', 'Define function read_file(filename)', shape='rectangle')
-    dot.node('C', 'Try to open file', shape='rectangle')
-    dot.node('D', 'File exists?', shape='diamond')  # Decision
-    dot.node('E', 'Read and return content', shape='rectangle')
-    dot.node('F', 'Catch FileNotFoundError', shape='rectangle')
-    dot.node('G', 'Print custom error message', shape='parallelogram')  # Output
-    dot.node('H', 'End', shape='ellipse')
-    
+    dot.attr(dpi='200')
+    dot.attr(rankdir='TB', size='7,11', ratio='compress')
+
+    fill_color   = random.choice(['#f9f9f9', '#e8f5e9', '#fce4ec', '#e3f2fd', '#fffde7'])
+    node_style   = random.choice(['filled,rounded', 'filled'])
+    edge_color   = random.choice(['#333333', '#1a237e', '#1b5e20', '#880e4f', '#e65100'])
+    border_color = random.choice(['#555555', '#1a237e', '#4a148c', '#00695c', '#bf360c'])
+
+    dot.attr('node', style=node_style, fillcolor=fill_color, color=border_color,
+             fontname='Helvetica', fontsize='13', width='2.8', height='0.8')
+    dot.attr('edge', color=edge_color, penwidth='1.8')
+
+    dot.node('A', 'Start',                               shape='ellipse')
+    dot.node('B', 'Define function\nread_file(filename)', shape='rectangle')
+    dot.node('C', 'Try to open file\nin read mode',      shape='rectangle')
+    dot.node('D', 'File exists?',                        shape='diamond', width='2.2', height='1.0')
+    dot.node('E', 'Read and\nreturn content',             shape='parallelogram')
+    dot.node('F', 'Catch\nFileNotFoundError',             shape='rectangle')
+    dot.node('G', 'Print custom\nerror message',          shape='parallelogram')
+    dot.node('H', 'End',                                 shape='ellipse')
+
     dot.edge('A', 'B')
     dot.edge('B', 'C')
     dot.edge('C', 'D')
     dot.edge('D', 'E', label='Yes')
     dot.edge('D', 'F', label='No')
     dot.edge('F', 'G')
-    dot.edge('G', 'H')
     dot.edge('E', 'H')
+    dot.edge('G', 'H')
+
     return dot.pipe(format='png')
 
-# ---------- Result Plots ----------
+
+# ---------- Plot Generation ----------
 def generate_result_plot_q1(df, model, X, y, save_path):
-    try:
-        predictions = model.predict(X)
-        plt.figure(figsize=(6,4))
-        plt.scatter(y, predictions, alpha=0.6, c='blue', edgecolors='black', linewidth=0.5)
-        plt.plot([y.min(), y.max()], [y.min(), y.max()], 'r--', linewidth=2)
-        plt.xlabel('Actual Values', fontsize=10)
-        plt.ylabel('Predicted Values', fontsize=10)
-        plt.title('Q1: Actual vs Predicted', fontsize=11)
-        plt.grid(True, alpha=0.3)
-        r2 = model.score(X, y)
-        plt.text(0.05, 0.95, f'R² = {r2:.3f}', transform=plt.gca().transAxes,
-                 fontsize=10, verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-        plt.tight_layout()
-        plt.savefig(save_path, dpi=100, bbox_inches='tight')
-        plt.close()
-    except Exception as e:
-        print(f"Error generating plot: {e}")
-        plt.figure(figsize=(6,4))
-        plt.text(0.5, 0.5, "Error generating plot", ha='center', va='center')
-        plt.savefig(save_path)
-        plt.close()
-
-def generate_result_q2(save_path):
-    try:
-        plt.figure(figsize=(6,2))
-        plt.text(0.5, 0.7, "✓ File read successfully!", ha='center', va='center', fontsize=14, color='green')
-        plt.text(0.5, 0.3, "Error handling: FileNotFoundError caught with custom message", ha='center', va='center', fontsize=10, color='blue')
-        plt.axis('off')
-        plt.tight_layout()
-        plt.savefig(save_path, dpi=100, bbox_inches='tight')
-        plt.close()
-    except Exception as e:
-        print(f"Error generating Q2 result: {e}")
-        plt.figure(figsize=(6,2))
-        plt.text(0.5, 0.5, "File handling demo", ha='center', va='center')
-        plt.savefig(save_path)
-        plt.close()
-
-# ---------- Implementation Code ----------
-def get_implementation_code_q1(df_name='dataset.csv'):
-    return textwrap.dedent(f'''\
-    import pandas as pd
-    from sklearn.linear_model import LinearRegression
-    import matplotlib.pyplot as plt
-
-    def read_file(filename):
-        try:
-            with open(filename, "r") as file:
-                return file.read()
-        except FileNotFoundError:
-            print("Custom Message: File not found. Please ensure the dataset exists.")
-
-    data = pd.read_csv("{df_name}")
-    print(f"Dataset shape: {{data.shape}}")
-    print(f"Columns: {{list(data.columns)}}")
-    print(f"First few rows:\\n{{data.head()}}")
-
-    feature_cols = [col for col in data.columns if col != 'target']
-    X = data[feature_cols]
-    y = data['target']
-
-    model = LinearRegression()
-    model.fit(X, y)
-    predictions = model.predict(X)
-
-    print("First 10 predictions:", predictions[:10])
-    print(f"Model coefficients: {{model.coef_}}")
-    print(f"Model intercept: {{model.intercept_:.4f}}")
-    print(f"R² score: {{model.score(X, y):.4f}}")
-
-    plt.figure(figsize=(8,6))
-    plt.scatter(y, predictions, alpha=0.6)
-    plt.plot([y.min(), y.max()], [y.min(), y.max()], 'r--', linewidth=2)
-    plt.title("Actual vs Predicted Values")
-    plt.xlabel("Actual Values")
-    plt.ylabel("Predicted Values")
-    plt.grid(True, alpha=0.3)
-    plt.savefig("result_q1.png")
-    plt.show()
-    ''')
-
-def get_implementation_code_q2():
-    return textwrap.dedent('''\
-    def read_file(filename):
-        try:
-            with open(filename, "r") as file:
-                content = file.read()
-                print(f"File '{filename}' read successfully!")
-                return content
-        except FileNotFoundError:
-            print(f"Custom Message: The file '{filename}' does not exist. Please check the filename.")
-            return None
-
-    print("Test 1: Reading an existing file")
-    content = read_file("sample.txt")
-    if content:
-        print(f"File content length: {len(content)} characters")
-        print("First 100 characters:", content[:100])
-
-    print("\\nTest 2: Reading a non-existent file")
-    content = read_file("nonexistent.txt")
-    ''')
-
-# ---------- Jupyter Notebook ----------
-def create_notebook(q1_code, q2_code, save_path):
-    try:
-        nb = nbf.v4.new_notebook()
-        nb.metadata = {
-            'kernelspec': {'display_name': 'Python 3', 'language': 'python', 'name': 'python3'},
-            'language_info': {'name': 'python', 'version': '3.12'}
-        }
-        cells = [
-            nbf.v4.new_markdown_cell("# COS 201 Assignment Solution\n\n---\n## Question 1: Multiple Linear Regression"),
-            nbf.v4.new_code_cell(q1_code),
-            nbf.v4.new_markdown_cell("\n---\n## Question 2: File Reading with Error Handling"),
-            nbf.v4.new_code_cell(q2_code)
-        ]
-        nb['cells'] = cells
-        with open(save_path, 'w') as f:
-            nbf.write(nb, f)
-    except Exception as e:
-        print(f"Error creating notebook: {e}")
-
-# ---------- PDF Generation with images on separate pages ----------
-def generate_pdf(student_name, matric_number, analysis_q1, analysis_q2,
-                 flowchart_q1_path, flowchart_q2_path, result_q1_path, result_q2_path,
-                 algo_q1, algo_q2, impl_q1, impl_q2, save_path):
-
-    width, height = A4
-    left_margin = 50
-    right_margin = width - 50
-    content_width = right_margin - left_margin
-
-    styles = {
-        'title': ParagraphStyle('Title', fontName='Helvetica-Bold', fontSize=16, alignment=1, spaceAfter=20),
-        'heading1': ParagraphStyle('Heading1', fontName='Helvetica-Bold', fontSize=14, spaceBefore=15, spaceAfter=10),
-        'heading2': ParagraphStyle('Heading2', fontName='Helvetica-Bold', fontSize=12, spaceBefore=10, spaceAfter=5),
-        'normal': ParagraphStyle('Normal', fontName='Helvetica', fontSize=10, leading=14, spaceAfter=8),
-        'code': ParagraphStyle('Code', fontName='Courier', fontSize=8, leading=10, leftIndent=10, rightIndent=10, spaceBefore=5, spaceAfter=5),
-    }
-
-    c = canvas.Canvas(save_path, pagesize=A4)
-
-    def draw_paragraph(text, style, x, y, max_width):
-        p = Paragraph(text, style)
-        p.wrapOn(c, max_width, height)
-        p.drawOn(c, x, y - p.height)
-        return p.height
-
-    y = height - 50
-
-    # ========== TITLE PAGE ==========
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(left_margin, y, "COS 201 ASSIGNMENT")
-    y -= 25
-    c.setFont("Helvetica", 12)
-    c.drawString(left_margin, y, f"Student: {student_name}")
-    c.drawString(left_margin + 300, y, f"Matric: {matric_number}")
-    y -= 40
-
-    # ========== QUESTION 1 ==========
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(left_margin, y, "QUESTION 1")
-    y -= 25
-
-    # Problem Statement
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(left_margin, y, "Problem Statement")
-    y -= 18
-    prob1 = "Use a python environment to develop multiple linear regression models on your choice data. The size of the data must not be less than 300."
-    y -= draw_paragraph(prob1, styles['normal'], left_margin, y, content_width) + 15
-
-    # Analysis
-    if y < 100:
-        c.showPage()
-        y = height - 50
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(left_margin, y, "Analysis")
-    y -= 18
-    analysis_q1 = clean_analysis_text(analysis_q1)
-    for para in analysis_q1.split('. '):
-        if not para.strip():
-            continue
-        if not para.endswith('.'):
-            para += '.'
-        if y - 20 < 50:
-            c.showPage()
-            y = height - 50
-        y -= draw_paragraph(para, styles['normal'], left_margin, y, content_width) + 5
-    y -= 10
-
-    # Design
-    if y < 100:
-        c.showPage()
-        y = height - 50
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(left_margin, y, "Design")
-    y -= 18
-    design_text = "Flowchart and Algorithm provided below."
-    y -= draw_paragraph(design_text, styles['normal'], left_margin, y, content_width) + 15
-
-    # Algorithm (we keep algorithm text inline, no image yet)
-    if y < 100:
-        c.showPage()
-        y = height - 50
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(left_margin, y, "Algorithm")
-    y -= 18
-    c.setFont("Courier", 8)
-    for line in algo_q1.split('\n'):
-        if line.strip():
-            if y < 50:
-                c.showPage()
-                y = height - 50
-                c.setFont("Courier", 8)
-            c.drawString(left_margin + 10, y, line)
-            y -= 10
-    y -= 5
-
-    # Implementation
-    if y < 100:
-        c.showPage()
-        y = height - 50
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(left_margin, y, "Implementation")
-    y -= 18
-    c.setFont("Courier", 7)
-    for line in impl_q1.split('\n'):
-        if line.strip() or line == '':
-            if len(line) > 80:
-                line = line[:80] + "..."
-            if y < 50:
-                c.showPage()
-                y = height - 50
-                c.setFont("Courier", 7)
-            c.drawString(left_margin + 10, y, line)
-            y -= 8
-    y -= 10
-
-    # ========== QUESTION 2 ==========
-    if y < 200:
-        c.showPage()
-        y = height - 50
-    else:
-        y -= 20
-
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(left_margin, y, "QUESTION 2")
-    y -= 25
-
-    # Problem Statement
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(left_margin, y, "Problem Statement")
-    y -= 18
-    prob2 = "Write a Python function that takes a file name and returns its content. The program should handle file not found errors and print a custom message when the file does not exist."
-    y -= draw_paragraph(prob2, styles['normal'], left_margin, y, content_width) + 15
-
-    # Analysis
-    if y < 100:
-        c.showPage()
-        y = height - 50
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(left_margin, y, "Analysis")
-    y -= 18
-    analysis_q2 = clean_analysis_text(analysis_q2)
-    for para in analysis_q2.split('. '):
-        if not para.strip():
-            continue
-        if not para.endswith('.'):
-            para += '.'
-        if y - 20 < 50:
-            c.showPage()
-            y = height - 50
-        y -= draw_paragraph(para, styles['normal'], left_margin, y, content_width) + 5
-    y -= 10
-
-    # Design
-    if y < 100:
-        c.showPage()
-        y = height - 50
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(left_margin, y, "Design")
-    y -= 18
-    design_text2 = "Flowchart and Algorithm provided below."
-    y -= draw_paragraph(design_text2, styles['normal'], left_margin, y, content_width) + 15
-
-    # Algorithm Q2
-    if y < 100:
-        c.showPage()
-        y = height - 50
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(left_margin, y, "Algorithm")
-    y -= 18
-    c.setFont("Courier", 8)
-    for line in algo_q2.split('\n'):
-        if line.strip():
-            if y < 50:
-                c.showPage()
-                y = height - 50
-                c.setFont("Courier", 8)
-            c.drawString(left_margin + 10, y, line)
-            y -= 10
-    y -= 5
-
-    # Implementation Q2
-    if y < 100:
-        c.showPage()
-        y = height - 50
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(left_margin, y, "Implementation")
-    y -= 18
-    c.setFont("Courier", 7)
-    for line in impl_q2.split('\n'):
-        if line.strip() or line == '':
-            if len(line) > 80:
-                line = line[:80] + "..."
-            if y < 50:
-                c.showPage()
-                y = height - 50
-                c.setFont("Courier", 7)
-            c.drawString(left_margin + 10, y, line)
-            y -= 8
-    y -= 10
-
-    # ========== IMAGE PAGES ==========
-    # After all text, start a new section with each image on its own page.
-    images = [
-        ("flowchart_q1.png", flowchart_q1_path, "Figure 1: Flowchart – Question 1 (Multiple Linear Regression)"),
-        ("flowchart_q2.png", flowchart_q2_path, "Figure 2: Flowchart – Question 2 (File Reading)"),
-        ("result_q1.png", result_q1_path, "Figure 3: Actual vs Predicted – Question 1"),
-        ("result_q2.png", result_q2_path, "Figure 4: File Handling Demo – Question 2"),
+    color_themes = [
+        ('royalblue', 'red'), ('green', 'black'),
+        ('purple', 'orange'), ('teal', 'darkred'), ('steelblue', 'firebrick'),
     ]
+    s_col, l_col = random.choice(color_themes)
+    # Only use filled markers to avoid matplotlib edgecolor warning
+    marker     = random.choice(['o', '.', 's', 'D', '^'])
+    line_style = random.choice(['--', '-.', ':'])
+    r2         = model.score(X, y)
+    y_pred     = model.predict(X)
 
-    for filename, path, caption in images:
-        if os.path.exists(path):
-            c.showPage()  # new page for each image
-            img = ImageReader(path)
-            # Use larger, print-friendly dimensions
-            img_width = 480          # almost full content width
-            img_height = 300          # fixed height – images will scale proportionally
-            img_x = left_margin + (content_width - img_width) // 2
-            y_img = height - 120      # leave more top margin
-            c.drawImage(img, img_x, y_img - img_height, width=img_width, height=img_height, preserveAspectRatio=True)
-            # Add caption below image
-            c.setFont("Helvetica", 10)
-            c.drawString(left_margin, y_img - img_height - 20, caption)
+    plt.figure(figsize=(8, 6), dpi=200)
+    plt.scatter(y, y_pred, alpha=0.6, c=s_col, marker=marker, edgecolors='k', linewidths=0.3)
+    plt.plot([y.min(), y.max()], [y.min(), y.max()],
+             color=l_col, linestyle=line_style, linewidth=2, label='Perfect Fit')
+    plt.title(f"Q1: Actual vs Predicted\n(n={len(df)}, R\u00b2={r2:.3f})", fontsize=13)
+    plt.xlabel("Actual Values", fontsize=11)
+    plt.ylabel("Predicted Values", fontsize=11)
+    plt.legend(fontsize=10)
+    plt.grid(True, alpha=0.25)
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=200)
+    plt.close()
+
+
+# Alias so tasks.py call of utils.generate_result_q2(...) works
+def generate_result_q2(save_path):
+    """Alias for generate_result_plot_q2 — matches tasks.py call."""
+    generate_result_plot_q2(save_path)
+
+
+def generate_result_plot_q2(save_path):
+    """Terminal-style output image demonstrating Q2 file handling."""
+    fig, ax = plt.subplots(figsize=(8, 4), dpi=200)
+    ax.set_facecolor('#1e1e1e')
+    fig.patch.set_facecolor('#1e1e1e')
+    ax.axis('off')
+    lines = [
+        ("Test 1: Reading an existing file",                'white',   12),
+        ("File 'sample.txt' read successfully!",            '#4caf50', 12),
+        ("File content length: 47 characters",              '#4caf50', 11),
+        ("First 100 characters: Hello from sample file...", '#aaaaaa', 10),
+        ("",                                                'white',   10),
+        ("Test 2: Reading a non-existent file",             'white',   12),
+        ("Custom Message: The file 'nonexistent.txt'",      '#2196f3', 11),
+        ("does not exist. Please check the filename.",      '#2196f3', 11),
+    ]
+    y_pos = 0.92
+    for text, color, size in lines:
+        ax.text(0.03, y_pos, text, transform=ax.transAxes,
+                color=color, fontsize=size, fontfamily='monospace', va='top')
+        y_pos -= 0.12
+    plt.tight_layout(pad=0)
+    plt.savefig(save_path, dpi=200, facecolor='#1e1e1e')
+    plt.close()
+
+
+# ---------- PDF Helpers ----------
+def _draw_paragraph(c, text, x, y, page_width, page_height, font_size=11):
+    max_chars = int((page_width - x - 50) / (font_size * 0.55))
+    line_h = font_size + 5
+    for line in textwrap.wrap(text, width=max_chars):
+        if y < 60:
+            c.showPage()
+            y = page_height - 60
+        c.setFont("Helvetica", font_size)
+        c.drawString(x, y, line)
+        y -= line_h
+    return y
+
+
+def _draw_heading(c, text, x, y, page_height, font_size=13):
+    if y < 110:
+        c.showPage()
+        y = page_height - 60
+    c.setFont("Helvetica-Bold", font_size)
+    c.drawString(x, y, text)
+    return y - font_size - 8
+
+
+def _draw_algorithm(c, algo_text, x, y, page_width, page_height, font_size=10):
+    max_chars = int((page_width - x - 50) / (font_size * 0.60))
+    line_h = font_size + 4
+    for raw in algo_text.split('\n'):
+        for line in (textwrap.wrap(raw, width=max_chars) or [' ']):
+            if y < 60:
+                c.showPage()
+                y = page_height - 60
+            c.setFont("Courier", font_size)
+            c.drawString(x, y, line)
+            y -= line_h
+    return y
+
+
+def _draw_code(c, code_text, x, y, page_width, page_height, font_size=9):
+    max_chars = int((page_width - x - 50) / (font_size * 0.60))
+    line_h = font_size + 4
+    for raw in code_text.split('\n'):
+        for line in (textwrap.wrap(raw if raw.strip() else ' ', width=max_chars) or [' ']):
+            if y < 60:
+                c.showPage()
+                y = page_height - 60
+            c.setFont("Courier", font_size)
+            c.drawString(x, y, line)
+            y -= line_h
+    return y
+
+
+def _draw_image_page(c, img_path, caption, page_width, page_height):
+    """One image per page, scaled to fill as much of the page as possible."""
+    c.showPage()
+    if not os.path.exists(img_path):
+        c.setFont("Helvetica", 12)
+        c.drawCentredString(page_width / 2, page_height / 2,
+                            f"[Image not found: {img_path}]")
+        return
+
+    img      = ImageReader(img_path)
+    orig_w, orig_h = img.getSize()
+    aspect   = orig_h / float(orig_w)
+    margin   = 40
+    cap_space = 50
+    target_w = page_width - margin * 2
+    target_h = target_w * aspect
+    max_h    = page_height - margin * 2 - cap_space
+
+    if target_h > max_h:
+        target_h = max_h
+        target_w = target_h / aspect
+
+    x_pos = (page_width  - target_w) / 2
+    y_pos = (page_height - target_h) / 2 + cap_space / 2
+
+    c.drawImage(img_path, x_pos, y_pos, width=target_w, height=target_h,
+                preserveAspectRatio=True)
+    c.setFont("Helvetica-Bold", 11)
+    c.drawCentredString(page_width / 2, y_pos - 30, caption)
+
+
+# ---------- Main PDF Generator ----------
+def generate_pdf(student_name, matric_number,
+                 analysis_q1, analysis_q2,
+                 flowchart_q1_path, flowchart_q2_path,
+                 result_q1_path, result_q2_path,
+                 algo_q1, algo_q2,
+                 impl_q1, impl_q2,
+                 save_path):
+
+    c    = canvas.Canvas(save_path, pagesize=A4)
+    W, H = A4
+    LEFT = 50
+
+    # ── TITLE PAGE ────────────────────────────────────────────────────────
+    c.setFont("Helvetica-Bold", 22)
+    c.drawCentredString(W / 2, H - 100, "COS 201: COMPUTER PROGRAMMING I")
+    c.setFont("Helvetica-Bold", 14)
+    c.drawCentredString(W / 2, H - 140, "ASSIGNMENT SUBMISSION")
+    c.setFont("Helvetica", 13)
+    c.drawCentredString(W / 2, H - 170, f"Student: {student_name}")
+    c.drawCentredString(W / 2, H - 192, f"Matric No: {matric_number}")
+
+    # ── QUESTION 1 ────────────────────────────────────────────────────────
+    c.showPage()
+    y = H - 55
+
+    y = _draw_heading(c, "QUESTION 1", LEFT, y, H, font_size=15)
+    y = _draw_heading(c, "Problem Statement", LEFT, y, H)
+    y = _draw_paragraph(c,
+        "Use a Python environment to develop multiple linear regression models on your "
+        "choice data. The size of the data must not be less than 300.",
+        LEFT, y, W, H)
+    y -= 10
+
+    y = _draw_heading(c, "Analysis", LEFT, y, H)
+    y = _draw_paragraph(c, analysis_q1, LEFT, y, W, H)
+    y -= 10
+
+    y = _draw_heading(c, "Design", LEFT, y, H)
+    y = _draw_paragraph(c, "Flowchart and Algorithm provided below.", LEFT, y, W, H)
+    y -= 10
+
+    y = _draw_heading(c, "Algorithm", LEFT, y, H)
+    y = _draw_algorithm(c, algo_q1, LEFT, y, W, H)
+    y -= 10
+
+    y = _draw_heading(c, "Implementation", LEFT, y, H)
+    y = _draw_code(c, impl_q1, LEFT, y, W, H)
+
+    _draw_image_page(c, flowchart_q1_path,
+                     "Figure 1: Flowchart – Question 1 (Multiple Linear Regression)", W, H)
+    _draw_image_page(c, result_q1_path,
+                     "Figure 3: Actual vs Predicted – Question 1", W, H)
+
+    # ── QUESTION 2 — always a brand new page ──────────────────────────────
+    c.showPage()
+    y = H - 55
+
+    y = _draw_heading(c, "QUESTION 2", LEFT, y, H, font_size=15)
+    y = _draw_heading(c, "Problem Statement", LEFT, y, H)
+    y = _draw_paragraph(c,
+        "Write a Python function that takes a file name and returns its content. "
+        "The program should handle file not found errors and print a custom message "
+        "when the file does not exist.",
+        LEFT, y, W, H)
+    y -= 10
+
+    y = _draw_heading(c, "Analysis", LEFT, y, H)
+    y = _draw_paragraph(c, analysis_q2, LEFT, y, W, H)
+    y -= 10
+
+    y = _draw_heading(c, "Design", LEFT, y, H)
+    y = _draw_paragraph(c, "Flowchart and Algorithm provided below.", LEFT, y, W, H)
+    y -= 10
+
+    y = _draw_heading(c, "Algorithm", LEFT, y, H)
+    y = _draw_algorithm(c, algo_q2, LEFT, y, W, H)
+    y -= 10
+
+    y = _draw_heading(c, "Implementation", LEFT, y, H)
+    y = _draw_code(c, impl_q2, LEFT, y, W, H)
+
+    _draw_image_page(c, flowchart_q2_path,
+                     "Figure 2: Flowchart – Question 2 (File Reading)", W, H)
+    _draw_image_page(c, result_q2_path,
+                     "Figure 4: File Handling Demo – Question 2", W, H)
 
     c.save()
-# ---------- Algorithm texts ----------
-ALGORITHM_Q1 = """Step 1: Start
-Step 2: Import required libraries (pandas, sklearn.linear_model, matplotlib)
-Step 3: Define function read_file(filename) with try-except for FileNotFoundError
-Step 4: Load dataset from CSV (>=300 rows)
-Step 5: Separate features (X) and target (y)
-Step 6: Create LinearRegression object
-Step 7: Fit model using X and y
-Step 8: Predict using X
-Step 9: Print first 10 predictions
-Step 10: Plot actual vs predicted and save image
-Step 11: End"""
-
-ALGORITHM_Q2 = """Step 1: Start
-Step 2: Define function read_file(filename)
-Step 3: Try to open file in read mode
-Step 4: If file exists, read content and return it
-Step 5: If FileNotFoundError occurs, print custom error message
-Step 6: End"""
