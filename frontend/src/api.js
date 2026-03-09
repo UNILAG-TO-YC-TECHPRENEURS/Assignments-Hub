@@ -39,6 +39,7 @@ export const assignmentAPI = {
     name: data.name,
     matric_number: data.matric,
     email: data.email,
+    department: data.department,   // new
   }).then(r => r.data),
 
   // COS205 — same blocking pattern, returns { message, file_links }

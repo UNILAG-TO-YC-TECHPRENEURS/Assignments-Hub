@@ -29,6 +29,7 @@ class GenerateAssignmentView(APIView):
             name=data['name'],
             matric_number=data['matric_number'],
             email=data['email'],
+            department=data['department'],          # new
         )
 
         token_obj.task_id     = task.id

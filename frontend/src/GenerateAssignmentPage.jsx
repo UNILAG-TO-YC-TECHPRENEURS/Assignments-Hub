@@ -10,6 +10,7 @@ const GenerateAssignmentPage = () => {
   const [isLoading, setIsLoading]               = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [error, setError]     = useState('');
+  const [department, setDepartment] = useState('');
   const [fileLinks, setFileLinks] = useState(null);
 
   const handleSubmit = async (e) => {
@@ -21,8 +22,8 @@ const GenerateAssignmentPage = () => {
     try {
       // Both courses: single awaited call, blocks until backend task.get() resolves
       const response = course === 'cos201'
-        ? await assignmentAPI.generateAssignment({ token, name, matric, email })
-        : await assignmentAPI.generateAssignment205({ token, name, matric, email });
+      ? await assignmentAPI.generateAssignment({ token, name, matric, email, department })
+      : await assignmentAPI.generateAssignment205({ token, name, matric, email });
 
       setFileLinks(response.file_links);
       setShowSuccessModal(true);
@@ -230,6 +231,26 @@ const GenerateAssignmentPage = () => {
                 />
               </div>
             </div>
+
+            {course === 'cos201' && (
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-slate-300">Department</label>
+                <select
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  className="w-full rounded-lg border border-primary/20 bg-background-dark/50 px-4 py-3.5 text-white placeholder:text-slate-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  disabled={isLoading}
+                  required
+                >
+                  <option value="cs">Computer Science</option>
+                  <option value="geo">Geosciences</option>
+                  <option value="math">Mathematics</option>
+                  <option value="math">Mathematics Education</option>
+                  <option value="math">Chemistry</option>
+                  <option value="math">Statistics</option>
+                </select>
+              </div>
+            )}
 
             <div className="space-y-2">
               <label className="block text-sm font-medium text-slate-300">Email Address</label>

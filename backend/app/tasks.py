@@ -63,7 +63,7 @@ Good luck with your studies!
 
 
 @shared_task
-def generate_assignment_task(token_str, name, matric_number, email):
+def generate_assignment_task(token_str, name, matric_number, email, department):
     try:
         token_obj = Token.objects.get(token=token_str, used=False)
     except Token.DoesNotExist:
@@ -74,17 +74,21 @@ def generate_assignment_task(token_str, name, matric_number, email):
     try:
         # 1. Analyses
         print("📝 Generating analysis for Q1...")
-        analysis_q1 = utils.generate_analysis_q1()
-        print("📝 Generating analysis for Q2...")
-        analysis_q2 = utils.generate_analysis_q2()
+        if department == 'geo':
+            analysis_q1 = utils.generate_analysis_geo()
+            df = utils.generate_seismic_dataset()
+            print("📝 Generating analysis for Q2...")
+            analysis_q2 = utils.generate_analysis_q2()
+        else:
+            analysis_q1 = utils.generate_analysis_q1()
+            df = utils.generate_dataset()
+            print("📝 Generating analysis for Q2...")
+            analysis_q2 = utils.generate_analysis_q2()
 
-        # 2. Dataset
-        print("📊 Generating dataset...")
-        df = utils.generate_dataset()
         dataset_path = os.path.join(job_dir, 'dataset.csv')
         df.to_csv(dataset_path, index=False)
 
-        # 3. Flowcharts
+        # 2. Flowcharts (same for both departments – you can make them department‑specific later if needed)
         print("📐 Creating flowcharts...")
         flowchart_q1_path = os.path.join(job_dir, 'flowchart_q1.png')
         with open(flowchart_q1_path, 'wb') as f:
@@ -94,24 +98,31 @@ def generate_assignment_task(token_str, name, matric_number, email):
         with open(flowchart_q2_path, 'wb') as f:
             f.write(utils.create_flowchart_q2())
 
-        # 4. Model + plots
-        print("📈 Training model and generating plots...")
-        from sklearn.linear_model import LinearRegression
-        feature_cols = [col for col in df.columns if col != 'target']
-        if not feature_cols:
-            raise ValueError("No feature columns found in dataset.")
-        X = df[feature_cols]
-        y = df['target']
-        model = LinearRegression().fit(X, y)
+        # 3. Model / DFT + plots for Q1
+        print("📈 Generating Q1 plot...")
+        if department == 'geo':
+            result_q1_path = os.path.join(job_dir, 'result_q1.png')
+            utils.generate_seismic_plot(df, result_q1_path)
+        else:
+            from sklearn.linear_model import LinearRegression
+            feature_cols = [col for col in df.columns if col != 'target']
+            if not feature_cols:
+                raise ValueError("No feature columns found in dataset.")
+            X = df[feature_cols]
+            y = df['target']
+            model = LinearRegression().fit(X, y)
+            result_q1_path = os.path.join(job_dir, 'result_q1.png')
+            utils.generate_result_plot_q1(df, model, X, y, result_q1_path)
 
-        result_q1_path = os.path.join(job_dir, 'result_q1.png')
-        utils.generate_result_plot_q1(df, model, X, y, result_q1_path)
-
+        # 4. Q2 plot (same for both)
         result_q2_path = os.path.join(job_dir, 'result_q2.png')
-        utils.generate_result_plot_q2(result_q2_path)
+        utils.generate_result_q2(result_q2_path)
 
-        # 5. Code
-        impl_q1 = utils.get_implementation_code_q1('dataset.csv')
+        # 5. Implementation code
+        if department == 'geo':
+            impl_q1 = utils.get_implementation_code_geo('dataset.csv')
+        else:
+            impl_q1 = utils.get_implementation_code_q1('dataset.csv')
         impl_q2 = utils.get_implementation_code_q2()
 
         # 6. Notebook
@@ -119,7 +130,7 @@ def generate_assignment_task(token_str, name, matric_number, email):
         notebook_path = os.path.join(job_dir, 'solution.ipynb')
         utils.create_notebook(impl_q1, impl_q2, notebook_path)
 
-        # 7. PDF
+        # 7. PDF (unchanged – uses analysis_q1, analysis_q2, etc.)
         print("📄 Generating PDF...")
         pdf_path = os.path.join(job_dir, 'COS201_ASSIGNMENT.pdf')
         utils.generate_pdf(

@@ -516,6 +516,187 @@ def _draw_image_page(c, img_path, caption, page_width, page_height):
     c.drawCentredString(page_width / 2, y_pos - 30, caption)
 
 
+# ==================================================
+# Geosciences Solution
+# ==================================================
+
+# ---------- Geosciences Functions ----------
+def generate_analysis_geo():
+    """Analysis for geosciences: seismic data interpretation."""
+    prompt = """You are a Nigerian university student in the Geosciences department writing the analysis section of a COS201 assignment.
+The task is to use an interactive Python environment to analyze seismic data.
+Write an analysis explaining:
+- what seismic data represents (e.g., ground motion over time).
+- how you will load the dataset and inspect its structure.
+- the steps you will take: plot the time series, compute basic statistics (mean, standard deviation), identify peaks or anomalies.
+- what you might infer from the plot (e.g., possible earthquake events, noise).
+The writing should sound natural, like a student explaining their approach.
+IMPORTANT: No markdown. Plain text only. Length: 200–300 words."""
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "system", "content": "You are a Nigerian university student. Write in plain text only."},
+                  {"role": "user", "content": prompt}],
+        temperature=0.7,
+        max_tokens=500
+    )
+    return clean_analysis_text(response.choices[0].message.content)
+
+
+def generate_seismic_dataset(n_samples=1024):
+    """Synthetic seismic data: combination of a few sine waves + noise + a spike."""
+    t = np.linspace(0, 50, n_samples)
+    # background low-frequency wave
+    signal = 2 * np.sin(2 * np.pi * 0.1 * t)
+    # add a higher-frequency component (e.g., P-wave)
+    signal += 1.5 * np.sin(2 * np.pi * 1.5 * t)
+    # random noise
+    noise = 0.8 * np.random.normal(0, 1, n_samples)
+    signal += noise
+    # simulate a large spike (earthquake) around sample 512
+    signal[512] += 8
+    # also a smaller spike at sample 256
+    signal[256] += 4
+    df = pd.DataFrame({'time': t, 'amplitude': signal})
+    return df
+
+
+def generate_seismic_plot(df, save_path):
+    """Plot seismic data (time series) and maybe a simple histogram."""
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 6))
+    ax1.plot(df['time'], df['amplitude'], color='steelblue')
+    ax1.set_title('Seismic Signal (Time Domain)')
+    ax1.set_xlabel('Time (s)')
+    ax1.set_ylabel('Amplitude')
+    ax1.grid(True, alpha=0.3)
+
+    # histogram of amplitudes
+    ax2.hist(df['amplitude'], bins=30, color='steelblue', edgecolor='black', alpha=0.7)
+    ax2.set_title('Distribution of Amplitudes')
+    ax2.set_xlabel('Amplitude')
+    ax2.set_ylabel('Frequency')
+    ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=100)
+    plt.close()
+
+
+def create_flowchart_geo():
+    """Simple flowchart for seismic analysis (matplotlib)."""
+    themes = [
+        ('#e1f5fe', '#1a237e'),
+        ('#f1f8e9', '#1b5e20'),
+        ('#fff3e0', '#bf360c'),
+    ]
+    fill_color, border_color = random.choice(themes)
+
+    fig, ax = plt.subplots(figsize=(12, 12), dpi=150)
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 15)
+    ax.axis('off')
+    fig.patch.set_facecolor('white')
+    ax.set_facecolor('white')
+
+    nodes = [
+        ('Start',                                         5, 14.0, 'ellipse'),
+        ('Load seismic dataset\n(CSV file)',              5, 12.5, 'para'),
+        ('Inspect data: shape,\nhead(), info()',          5, 11.0, 'rect'),
+        ('Plot time series',                              5,  9.5, 'rect'),
+        ('Compute statistics\n(mean, std, min, max)',     5,  8.0, 'rect'),
+        ('Identify peaks\n(largest amplitudes)',          5,  6.5, 'rect'),
+        ('Interpret findings',                             5,  5.0, 'rect'),
+        ('Generate report\n(plots + analysis)',           5,  3.5, 'para'),
+        ('End',                                           5,  2.0, 'ellipse'),
+    ]
+
+    box_w = 4.4
+    box_h = 1.0
+
+    for label, cx, cy, shape in nodes:
+        x = cx - box_w / 2
+        y = cy - box_h / 2
+
+        if shape == 'ellipse':
+            ax.add_patch(mpatches.Ellipse(
+                (cx, cy), box_w * 0.65, box_h * 1.15,
+                facecolor=fill_color, edgecolor=border_color, linewidth=2.5, zorder=3,
+            ))
+        elif shape == 'rect':
+            ax.add_patch(mpatches.FancyBboxPatch(
+                (x, y), box_w, box_h,
+                boxstyle='round,pad=0.06',
+                facecolor=fill_color, edgecolor=border_color, linewidth=2.5, zorder=3,
+            ))
+        elif shape == 'para':
+            skew = 0.22
+            ax.add_patch(plt.Polygon([
+                (x + skew,         y),
+                (x + box_w + skew, y),
+                (x + box_w - skew, y + box_h),
+                (x - skew,         y + box_h),
+            ], facecolor=fill_color, edgecolor=border_color, linewidth=2.5, zorder=3))
+
+        ax.text(cx, cy, label, ha='center', va='center',
+                fontsize=11, zorder=4, multialignment='center')
+
+    for i in range(len(nodes) - 1):
+        _, cx1, cy1, _ = nodes[i]
+        _, cx2, cy2, _ = nodes[i + 1]
+        ax.annotate('',
+                    xy=(cx2, cy2 + box_h / 2 + 0.05),
+                    xytext=(cx1, cy1 - box_h / 2 - 0.05),
+                    arrowprops=dict(arrowstyle='->', color=border_color, lw=2.5),
+                    zorder=2)
+
+    plt.tight_layout(pad=0.3)
+    buf = io.BytesIO()
+    plt.savefig(buf, dpi=150, bbox_inches='tight', facecolor='white', format='png')
+    plt.close()
+    buf.seek(0)
+    return buf.read()
+
+
+def get_implementation_code_geo(dataset_filename='dataset.csv'):
+    """Python code for seismic data analysis (plotting, stats)."""
+    var_df = random.choice(['data', 'df', 'seismic'])
+    var_stats = random.choice(['stats', 'summary', 'desc'])
+    return textwrap.dedent(f'''\
+    import pandas as pd
+    import matplotlib.pyplot as plt
+
+    # Load seismic data
+    {var_df} = pd.read_csv("{dataset_filename}")
+    print("{var_df} shape:", {var_df}.shape)
+    print("\\nFirst 5 rows:")
+    print({var_df}.head())
+
+    # Basic statistics
+    {var_stats} = {var_df}['amplitude'].describe()
+    print("\\nAmplitude statistics:")
+    print({var_stats})
+
+    # Plot time series
+    plt.figure(figsize=(10, 5))
+    plt.plot({var_df}['time'], {var_df}['amplitude'], color='steelblue', linewidth=0.8)
+    plt.title('Seismic Signal')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Amplitude')
+    plt.grid(True, alpha=0.3)
+    plt.savefig('result_q1.png')
+    plt.show()
+
+    # Histogram of amplitudes
+    plt.figure(figsize=(8, 4))
+    plt.hist({var_df}['amplitude'], bins=30, color='steelblue', edgecolor='black', alpha=0.7)
+    plt.title('Distribution of Amplitudes')
+    plt.xlabel('Amplitude')
+    plt.ylabel('Frequency')
+    plt.grid(True, alpha=0.3)
+    plt.savefig('histogram.png')
+    plt.show()
+    ''')
+
+    
 # ---------- Main PDF Generator ----------
 def generate_pdf(student_name, matric_number,
                  analysis_q1, analysis_q2,
