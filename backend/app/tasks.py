@@ -24,7 +24,7 @@ def create_zip_archive(file_paths, zip_path):
 
 def send_assignment_email(to_email: str, student_name: str, zip_path: str, course: str = "COS201"):
     """Send an email with the zip file attached."""
-    subject = f"Your {course} Assignment – Files Attached"
+    subject = f"Your {course} Assignment - Files Attached"
     body_plain = f"""Hello {student_name},
 
 Your {course} assignment has been generated successfully.
@@ -56,7 +56,6 @@ Good luck with your studies!
         to=[to_email],
     )
     msg.attach_alternative(body_html, "text/html")
-    # Attach the zip file
     with open(zip_path, 'rb') as f:
         msg.attach(f"{course}_Assignment_{student_name}.zip", f.read(), 'application/zip')
     msg.send(fail_silently=False)
@@ -72,65 +71,100 @@ def generate_assignment_task(token_str, name, matric_number, email, department):
     job_dir = tempfile.mkdtemp()
 
     try:
-        # 1. Analyses
-        print("📝 Generating analysis for Q1...")
-        if department == 'geo':
-            analysis_q1 = utils.generate_analysis_geo()
-            df = utils.generate_seismic_dataset()
-            print("📝 Generating analysis for Q2...")
-            analysis_q2 = utils.generate_analysis_q2()
-        else:
-            analysis_q1 = utils.generate_analysis_q1()
-            df = utils.generate_dataset()
-            print("📝 Generating analysis for Q2...")
-            analysis_q2 = utils.generate_analysis_q2()
+        # ── Defaults (overridden per department below) ─────────────────────
+        q2_problem_statement = None
+        algo_q2              = utils.ALGORITHM_Q2
+        flowchart_q2_path    = os.path.join(job_dir, 'flowchart_q2.png')
+        result_q2_path       = os.path.join(job_dir, 'result_q2.png')
 
+        # ── Q2 analysis: default for CS/Geo, overridden for Chem ───────────
+        print("📝 Generating analysis for Q2...")
+        analysis_q2 = utils.generate_analysis_q2()
+
+        # ── Department-specific Q1 setup ───────────────────────────────────
+        print("📝 Generating analysis for Q1...")
+
+        if department == 'geo':
+            analysis_q1       = utils.generate_analysis_geo()
+            df                = utils.generate_seismic_dataset()
+            flowchart_q1_path = os.path.join(job_dir, 'flowchart_geo.png')
+            with open(flowchart_q1_path, 'wb') as f:
+                f.write(utils.create_flowchart_geo())
+            impl_q1   = utils.get_implementation_code_geo('dataset.csv')
+            plot_func = utils.generate_seismic_plot
+
+            # Default Q2 (file reading)
+            impl_q2 = utils.get_implementation_code_q2()
+            with open(flowchart_q2_path, 'wb') as f:
+                f.write(utils.create_flowchart_q2())
+            utils.generate_result_q2(result_q2_path)
+
+        elif department == 'chem':
+            analysis_q1       = utils.generate_analysis_chem()
+            df                = utils.generate_chem_dataset()
+            flowchart_q1_path = os.path.join(job_dir, 'flowchart_chem.png')
+            with open(flowchart_q1_path, 'wb') as f:
+                f.write(utils.create_flowchart_chem())
+            impl_q1   = utils.get_implementation_code_chem('dataset.csv')
+            plot_func = utils.generate_chem_plot
+
+            # Chem-specific Q2 — ChEMBL descriptor lookup
+            print("📝 Generating chem Q2 content...")
+            analysis_q2          = utils.generate_analysis_chem_q2()
+            algo_q2              = utils.ALGORITHM_Q2_CHEM
+            impl_q2              = utils.get_implementation_code_chem_q2()
+            q2_problem_statement = (
+                "Use the ChEMBL ID to get the molecular descriptors of the molecules. "
+                "Write a Python function that takes a ChEMBL ID and returns its molecular "
+                "descriptors (molecular weight and ALogP) using the ChEMBL REST API. "
+                "The function should handle errors when an invalid ID is provided and "
+                "print a custom error message."
+            )
+            with open(flowchart_q2_path, 'wb') as f:
+                f.write(utils.create_flowchart_chem_q2())
+            utils.generate_result_chem_q2(result_q2_path)
+
+        else:  # default: Computer Science
+            analysis_q1       = utils.generate_analysis_q1()
+            df                = utils.generate_dataset()
+            flowchart_q1_path = os.path.join(job_dir, 'flowchart_q1.png')
+            with open(flowchart_q1_path, 'wb') as f:
+                f.write(utils.create_flowchart_q1())
+            impl_q1   = utils.get_implementation_code_q1('dataset.csv')
+            plot_func = None  # handled separately (sklearn model)
+
+            # Default Q2 (file reading)
+            impl_q2 = utils.get_implementation_code_q2()
+            with open(flowchart_q2_path, 'wb') as f:
+                f.write(utils.create_flowchart_q2())
+            utils.generate_result_q2(result_q2_path)
+
+        # ── Save dataset ───────────────────────────────────────────────────
         dataset_path = os.path.join(job_dir, 'dataset.csv')
         df.to_csv(dataset_path, index=False)
 
-        # 2. Flowcharts (same for both departments – you can make them department‑specific later if needed)
-        print("📐 Creating flowcharts...")
-        flowchart_q1_path = os.path.join(job_dir, 'flowchart_q1.png')
-        with open(flowchart_q1_path, 'wb') as f:
-            f.write(utils.create_flowchart_q1())
-
-        flowchart_q2_path = os.path.join(job_dir, 'flowchart_q2.png')
-        with open(flowchart_q2_path, 'wb') as f:
-            f.write(utils.create_flowchart_q2())
-
-        # 3. Model / DFT + plots for Q1
+        # ── Generate Q1 plot ───────────────────────────────────────────────
         print("📈 Generating Q1 plot...")
-        if department == 'geo':
-            result_q1_path = os.path.join(job_dir, 'result_q1.png')
-            utils.generate_seismic_plot(df, result_q1_path)
-        else:
+        result_q1_path = os.path.join(job_dir, 'result_q1.png')
+
+        if department in ('geo', 'chem'):
+            plot_func(df, result_q1_path)
+        else:  # Computer Science
             from sklearn.linear_model import LinearRegression
             feature_cols = [col for col in df.columns if col != 'target']
             if not feature_cols:
                 raise ValueError("No feature columns found in dataset.")
-            X = df[feature_cols]
-            y = df['target']
+            X     = df[feature_cols]
+            y     = df['target']
             model = LinearRegression().fit(X, y)
-            result_q1_path = os.path.join(job_dir, 'result_q1.png')
             utils.generate_result_plot_q1(df, model, X, y, result_q1_path)
 
-        # 4. Q2 plot (same for both)
-        result_q2_path = os.path.join(job_dir, 'result_q2.png')
-        utils.generate_result_q2(result_q2_path)
-
-        # 5. Implementation code
-        if department == 'geo':
-            impl_q1 = utils.get_implementation_code_geo('dataset.csv')
-        else:
-            impl_q1 = utils.get_implementation_code_q1('dataset.csv')
-        impl_q2 = utils.get_implementation_code_q2()
-
-        # 6. Notebook
+        # ── Notebook ───────────────────────────────────────────────────────
         print("📓 Creating Jupyter notebook...")
         notebook_path = os.path.join(job_dir, 'solution.ipynb')
         utils.create_notebook(impl_q1, impl_q2, notebook_path)
 
-        # 7. PDF (unchanged – uses analysis_q1, analysis_q2, etc.)
+        # ── PDF ────────────────────────────────────────────────────────────
         print("📄 Generating PDF...")
         pdf_path = os.path.join(job_dir, 'COS201_ASSIGNMENT.pdf')
         utils.generate_pdf(
@@ -143,26 +177,27 @@ def generate_assignment_task(token_str, name, matric_number, email, department):
             result_q1_path=result_q1_path,
             result_q2_path=result_q2_path,
             algo_q1=utils.ALGORITHM_Q1,
-            algo_q2=utils.ALGORITHM_Q2,
+            algo_q2=algo_q2,
             impl_q1=impl_q1,
             impl_q2=impl_q2,
             save_path=pdf_path,
+            q2_problem_statement=q2_problem_statement,
         )
 
-        # 8. Create ZIP archive (before uploading so we can upload it too)
+        # ── ZIP ────────────────────────────────────────────────────────────
         print("📦 Creating ZIP archive...")
         all_files = [
             pdf_path, flowchart_q1_path, flowchart_q2_path,
             result_q1_path, result_q2_path, notebook_path, dataset_path
         ]
         safe_email = email.replace('@', '_at_').replace('.', '_dot_')
-        zip_path = os.path.join(job_dir, f"COS201_Assignment_{safe_email}.zip")
+        zip_path   = os.path.join(job_dir, f"COS201_Assignment_{safe_email}.zip")
         create_zip_archive(all_files, zip_path)
         print(f"✅ ZIP archive created: {zip_path}")
 
-        # 9. Upload all files (including ZIP) to Cloudinary
+        # ── Cloudinary upload ──────────────────────────────────────────────
         print("☁️  Uploading files to Cloudinary...")
-        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        ts     = datetime.now().strftime('%Y%m%d_%H%M%S')
         prefix = f"{safe_email}_{ts}"
 
         cloudinary.config(
@@ -194,18 +229,19 @@ def generate_assignment_task(token_str, name, matric_number, email, department):
             file_links[display_name] = result["secure_url"]
             print(f"  ✅ {display_name} → {result['secure_url']}")
 
-        # 10. Save to DB (for frontend)
-        token_obj.used = True
-        token_obj.used_by_email = email
-        token_obj.file_links = file_links
-        token_obj.task_status = Token.AssignmentStatus.DONE
+        # ── Save to DB ─────────────────────────────────────────────────────
+        token_obj.used           = True
+        token_obj.used_by_email  = email
+        token_obj.file_links     = file_links
+        token_obj.task_status    = Token.AssignmentStatus.DONE
         token_obj.save(update_fields=['used', 'used_by_email', 'file_links', 'task_status'])
         print("✅ file_links saved to DB.")
 
-        # 11. Send email with ZIP attachment (the same ZIP, still available locally)
+        # ── Email ──────────────────────────────────────────────────────────
         print(f"📧 Sending email to {email}...")
         try:
-            send_assignment_email(to_email=email, student_name=name, zip_path=zip_path, course="COS201")
+            send_assignment_email(to_email=email, student_name=name,
+                                  zip_path=zip_path, course="COS201")
             print("✅ Email sent with ZIP attachment.")
         except Exception as email_err:
             print(f"⚠️  Email failed (files still available via Cloudinary): {email_err}")

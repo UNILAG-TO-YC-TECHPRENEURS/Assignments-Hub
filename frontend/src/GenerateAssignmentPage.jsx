@@ -245,9 +245,9 @@ const GenerateAssignmentPage = () => {
                   <option value="cs">Computer Science</option>
                   <option value="geo">Geosciences</option>
                   <option value="math">Mathematics</option>
-                  <option value="math">Mathematics Education</option>
-                  <option value="math">Chemistry</option>
-                  <option value="math">Statistics</option>
+                  <option value="math_edu">Mathematics Education</option>
+                  <option value="chem">Chemistry</option>
+                  <option value="stats">Statistics</option>
                 </select>
               </div>
             )}
