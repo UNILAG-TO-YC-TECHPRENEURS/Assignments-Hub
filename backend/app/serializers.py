@@ -5,7 +5,7 @@ class GenerateAssignmentSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=100)
     matric_number = serializers.CharField(max_length=20)
     email = serializers.EmailField()
-    department = serializers.ChoiceField(choices=['cs', 'math', 'stats', 'math_edu', 'geo', 'chem'], required=True)  # new
+    department = serializers.ChoiceField(choices=['cs', 'math', 'stats', 'math_edu', 'geo', 'chem', 'ds'], required=True)  # new
 
     def validate_token(self, value):
         from .models import Token
