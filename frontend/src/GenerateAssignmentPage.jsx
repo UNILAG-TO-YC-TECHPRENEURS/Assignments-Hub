@@ -10,7 +10,7 @@ const GenerateAssignmentPage = () => {
   const [isLoading, setIsLoading]               = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [error, setError]     = useState('');
-  const [department, setDepartment] = useState('');
+  const [department, setDepartment] = useState('cs');
   const [fileLinks, setFileLinks] = useState(null);
 
   const handleSubmit = async (e) => {
