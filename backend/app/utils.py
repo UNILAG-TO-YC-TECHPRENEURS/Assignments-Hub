@@ -1083,6 +1083,7 @@ def generate_result_chem_q2(save_path):
 # PDF Generator
 # ==================================================
 
+# ---------- PDF Generator ----------
 def generate_pdf(student_name, matric_number,
                  analysis_q1, analysis_q2,
                  flowchart_q1_path, flowchart_q2_path,
@@ -1090,6 +1091,7 @@ def generate_pdf(student_name, matric_number,
                  algo_q1, algo_q2,
                  impl_q1, impl_q2,
                  save_path,
+                 q1_problem_statement=None,
                  q2_problem_statement=None):
 
     c    = canvas.Canvas(save_path, pagesize=A4)
@@ -1111,10 +1113,12 @@ def generate_pdf(student_name, matric_number,
 
     y = _draw_heading(c, "QUESTION 1", LEFT, y, H, font_size=15)
     y = _draw_heading(c, "Problem Statement", LEFT, y, H)
-    y = _draw_paragraph(c,
+
+    q1_stmt = q1_problem_statement or (
         "Use a Python environment to develop multiple linear regression models on your "
-        "choice data. The size of the data must not be less than 300.",
-        LEFT, y, W, H)
+        "choice data. The size of the data must not be less than 300."
+    )
+    y = _draw_paragraph(c, q1_stmt, LEFT, y, W, H)
     y -= 10
 
     y = _draw_heading(c, "Analysis", LEFT, y, H)

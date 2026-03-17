@@ -72,6 +72,7 @@ def generate_assignment_task(token_str, name, matric_number, email, department):
 
     try:
         # ── Defaults (overridden per department below) ─────────────────────
+        q1_problem_statement = None
         q2_problem_statement = None
         algo_q2              = utils.ALGORITHM_Q2
         flowchart_q2_path    = os.path.join(job_dir, 'flowchart_q2.png')
@@ -93,6 +94,12 @@ def generate_assignment_task(token_str, name, matric_number, email, department):
             impl_q1   = utils.get_implementation_code_geo('dataset.csv')
             plot_func = utils.generate_seismic_plot
 
+            q1_problem_statement = (
+                "Use an interactive Python environment to analyze seismic data. "
+                "Load the provided dataset, plot the time series, compute basic statistics "
+                "(mean, standard deviation), and identify peaks or anomalies."
+            )
+
             # Default Q2 (file reading)
             impl_q2 = utils.get_implementation_code_q2()
             with open(flowchart_q2_path, 'wb') as f:
@@ -107,6 +114,12 @@ def generate_assignment_task(token_str, name, matric_number, email, department):
                 f.write(utils.create_flowchart_chem())
             impl_q1   = utils.get_implementation_code_chem('dataset.csv')
             plot_func = utils.generate_chem_plot
+
+            q1_problem_statement = (
+                "Use the ChEMBL database to discover chemicals that can inhibit the Plasmodium falciparum "
+                "protein target. Retrieve molecules and their molecular descriptors (molecular weight "
+                "and ALogP) using the ChEMBL REST API."
+            )
 
             # Chem-specific Q2 — ChEMBL descriptor lookup
             print("📝 Generating chem Q2 content...")
@@ -132,6 +145,11 @@ def generate_assignment_task(token_str, name, matric_number, email, department):
                 f.write(utils.create_flowchart_q1())
             impl_q1   = utils.get_implementation_code_q1('dataset.csv')
             plot_func = None  # handled separately (sklearn model)
+
+            q1_problem_statement = (
+                "Use a Python environment to develop multiple linear regression models on your "
+                "choice data. The size of the data must not be less than 300."
+            )
 
             # Default Q2 (file reading)
             impl_q2 = utils.get_implementation_code_q2()
@@ -181,6 +199,7 @@ def generate_assignment_task(token_str, name, matric_number, email, department):
             impl_q1=impl_q1,
             impl_q2=impl_q2,
             save_path=pdf_path,
+            q1_problem_statement=q1_problem_statement,
             q2_problem_statement=q2_problem_statement,
         )
 
